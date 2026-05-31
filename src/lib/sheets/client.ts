@@ -1,0 +1,175 @@
+import { SHEET_NAMES, FIRST_DATA_ROW } from "@/constants/sheet-structure";
+
+export interface SheetBatchGetResult {
+  values: string[][];
+  range: string;
+}
+
+export async function batchGetSheet(
+  spreadsheetId: string,
+  range: string,
+  accessToken: string,
+): Promise<SheetBatchGetResult> {
+  const response = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}?valueRenderOption=UNFORMATTED_VALUE`,
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+    },
+  );
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new SheetsApiError(
+      response.status,
+      error.error?.message ?? "Failed to read sheet",
+      range,
+    );
+  }
+
+  const data = await response.json();
+  return {
+    values: data.values ?? [],
+    range: data.range ?? range,
+  };
+}
+
+export async function batchUpdateSheet(
+  spreadsheetId: string,
+  range: string,
+  values: (string | number | boolean)[][],
+  accessToken: string,
+): Promise<void> {
+  const response = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}`,
+    {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        values: [values],
+        inputOption: "RAW",
+      }),
+    },
+  );
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new SheetsApiError(
+      response.status,
+      error.error?.message ?? "Failed to update sheet",
+      range,
+    );
+  }
+}
+
+export async function appendRowToSheet(
+  spreadsheetId: string,
+  sheetName: string,
+  values: (string | number | boolean)[],
+  accessToken: string,
+): Promise<void> {
+  const range = `${sheetName}!A:${String.fromCharCode(65 + values.length - 1)}`;
+
+  const response = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}:append`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        values: [values],
+        insertDataOption: "INSERT_ROWS",
+        inputOption: "RAW",
+      }),
+    },
+  );
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new SheetsApiError(
+      response.status,
+      error.error?.message ?? "Failed to append row",
+      range,
+    );
+  }
+}
+
+export async function updateCell(
+  spreadsheetId: string,
+  sheetName: string,
+  cell: string,
+  value: string | number | boolean,
+  accessToken: string,
+): Promise<void> {
+  const range = `${sheetName}!${cell}`;
+
+  const response = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}`,
+    {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        values: [[value]],
+        inputOption: "RAW",
+      }),
+    },
+  );
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new SheetsApiError(
+      response.status,
+      error.error?.message ?? "Failed to update cell",
+      range,
+    );
+  }
+}
+
+export class SheetsApiError extends Error {
+  constructor(
+    public statusCode: number,
+    message: string,
+    public range: string,
+  ) {
+    super(message);
+    this.name = "SheetsApiError";
+  }
+
+  isPermissionError(): boolean {
+    return this.statusCode === 403;
+  }
+
+  isNotFoundError(): boolean {
+    return this.statusCode === 404;
+  }
+
+  isQuotaError(): boolean {
+    return this.statusCode === 429;
+  }
+}
+
+export function getToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return sessionStorage.getItem("google_access_token");
+}
+
+export function hasToken(): boolean {
+  return !!getToken();
+}
+
+export function clearToken(): void {
+  if (typeof window === "undefined") return;
+  sessionStorage.removeItem("google_access_token");
+}
+
+export { SHEET_NAMES, FIRST_DATA_ROW };
