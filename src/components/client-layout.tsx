@@ -15,7 +15,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
             retry: 1,
           },
         },
-      })
+      }),
   );
 
   return (

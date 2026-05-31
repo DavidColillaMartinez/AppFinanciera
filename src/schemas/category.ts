@@ -7,11 +7,11 @@ export const categorySchema = z.object({
   presupuestoMensual: z.number().min(0),
   tipoHabitual: z.enum([CategoryType.INGRESO, CategoryType.GASTO]),
   activo: z.enum(["S", "N"]),
-  grupo: z.string().max(100).optional().default(""),
+  grupo: z.string().max(100).optional(),
   color: z.string().regex(/^#[0-9A-Fa-f]{6}$/, "Color hex valido"),
-  icono: z.string().max(50).optional().default(""),
+  icono: z.string().max(50).optional(),
   orden: z.number().int().min(0),
-  notas: z.string().max(500).optional().default(""),
+  notas: z.string().max(500).optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -25,6 +25,10 @@ export const categoryCreateSchema = categorySchema.omit({
 });
 
 export type CategoryCreateInput = z.infer<typeof categoryCreateSchema>;
+
+export const categorySheetSchema = categorySchema.omit({
+  categoriaId: true,
+});
 
 export const categoryUpdateSchema = categorySchema.partial();
 
