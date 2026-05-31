@@ -59,6 +59,67 @@ export const CUENTAS_HEADERS = [
   "updatedAt",
 ] as const;
 
+export const GASTOS_FIJOS_HEADERS = [
+  "fijoId",
+  "concepto",
+  "categoria",
+  "importe",
+  "frecuencia",
+  "diaCargo",
+  "cuentaOrigen",
+  "activo",
+  "fechaInicio",
+  "fechaFin",
+  "notas",
+  "createdAt",
+  "updatedAt",
+] as const;
+
+export const PAGOS_FUTUROS_HEADERS = [
+  "pagoId",
+  "concepto",
+  "categoria",
+  "importeObjetivo",
+  "fechaVencimiento",
+  "frecuencia",
+  "cuentaReserva",
+  "activo",
+  "saldoReservado",
+  "mesesRestantes",
+  "aporteMensual",
+  "notas",
+  "createdAt",
+  "updatedAt",
+] as const;
+
+export const PAGOS_APLAZADOS_HEADERS = [
+  "aplazadoId",
+  "concepto",
+  "importeTotal",
+  "importePagado",
+  "fechaInicio",
+  "fechaFin",
+  "cuotaMensual",
+  "categoria",
+  "cuentaOrigen",
+  "estado",
+  "notas",
+  "createdAt",
+  "updatedAt",
+] as const;
+
+export const MOV_RESERVAS_HEADERS = [
+  "id",
+  "fecha",
+  "reservaId",
+  "tipoMovimiento",
+  "importe",
+  "cuentaOrigen",
+  "cuentaDestino",
+  "notas",
+  "createdAt",
+] as const;
+
 export const SHEET_LEGACY = {
   LEEME: "00_LEEME",
   DASHBOARD: "Dashboard",

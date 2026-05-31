@@ -3,12 +3,13 @@
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, ArrowLeftRight, Wallet, Target, Settings } from "lucide-react";
+import { Home, ArrowLeftRight, Wallet, Target, Settings, CalendarDays, CreditCard } from "lucide-react";
 
 const navItems: { href: `/${string}`; label: string; icon: typeof Home }[] = [
   { href: "/", label: "Inicio", icon: Home },
-  { href: "/transactions", label: "Movimientos", icon: ArrowLeftRight },
-  { href: "/accounts", label: "Cuentas", icon: Wallet },
+  { href: "/transactions", label: "Mov.", icon: ArrowLeftRight },
+  { href: "/fixed-expenses", label: "Fijos", icon: CalendarDays },
+  { href: "/future-payments", label: "Futuros", icon: CreditCard },
   { href: "/goals", label: "Reservas", icon: Target },
   { href: "/settings", label: "Ajustes", icon: Settings },
 ];

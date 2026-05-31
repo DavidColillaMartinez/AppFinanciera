@@ -44,6 +44,25 @@ Version inicial completa del PWA de finanzas personales.
 
 ---
 
+## 1.1.0
+
+Version con rediseño visual y nuevos módulos de planificación financiera.
+
+### Añadido
+
+- **Rediseño visual**: Paleta de colores especifica para finanzas (verde ingresos, rojo gastos, azul ahorro), Google Fonts Sora y Figtree, animaciones fade-in, microinteracciones en botones y tarjetas.
+- **Dashboard mejorado**: Indicador de salud financiera con badge de estado, MetricCards con iconos y fondo con gradiente por tipo, mejor jerarquia visual y animaciones escalonadas.
+- **BottomNav mejorada**: Indicador de activo con fondo highlight, iconos con strokeWidth dinamico, transiciones suaves.
+- **Gastos Fijos** (`/fixed-expenses`): CRUD completo para gastos recurrentes con total mensual estimado, frecuencia, dia de cargo y cuenta origen.
+- **Pagos Futuros** (`/future-payments`): CRUD completo para objetivos de ahorro con importe objetivo, saldo reservado, meses restantes y aporte mensual.
+- **Pagos Aplazados** (`/deferred-payments`): CRUD completo para compras a plazos con importe total, importe pagado, cuota mensual y estado.
+
+### Corregido
+
+- Todos los fixes de la v1.0.2 incluidos.
+
+---
+
 ## 1.0.2
 
 Version de correcciones criticas para hacer la app funcional en Vercel.
