@@ -14,11 +14,11 @@ export const transactionSchema = z.object({
   ]),
   categoria: z.string().min(1).max(100),
   importe: z.number().positive("Importe debe ser positivo"),
-  metodo: z.string().max(50).optional().default(""),
-  cuentaOrigen: z.string().max(100).optional().default(""),
-  cuentaDestino: z.string().max(100).optional().default(""),
-  notas: z.string().max(500).optional().default(""),
-  reservaId: z.string().max(100).optional().default(""),
+  metodo: z.string().max(50).optional(),
+  cuentaOrigen: z.string().max(100).optional(),
+  cuentaDestino: z.string().max(100).optional(),
+  notas: z.string().max(500).optional(),
+  reservaId: z.string().max(100).optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -33,6 +33,10 @@ export const transactionCreateSchema = transactionSchema.omit({
 });
 
 export type TransactionCreateInput = z.infer<typeof transactionCreateSchema>;
+
+export const transactionSheetSchema = transactionSchema.omit({
+  id: true,
+});
 
 export const transactionUpdateSchema = transactionSchema.partial();
 

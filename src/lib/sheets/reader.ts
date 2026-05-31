@@ -18,7 +18,7 @@ export async function readSheetHeaders(
   return result.values[0].map((v) => String(v));
 }
 
-export async function readSheetData<T extends Record<string, unknown>>(
+export async function readSheetData<T>(
   spreadsheetId: string,
   sheetName: string,
   rowAdapter: (row: Record<string, string>, headers: string[]) => T,
