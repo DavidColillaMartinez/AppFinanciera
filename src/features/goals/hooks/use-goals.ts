@@ -1,10 +1,31 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { SHEET_NAMES } from "@/constants/sheet-structure";
 import { readSheetData } from "@/lib/sheets/reader";
-import { createRow, softDeleteRow, getToken } from "@/lib/sheets/writer";
-import { goalSheetSchema } from "@/schemas/goal";
+import {
+  appendModelRow,
+  findRowIndexByColumnValue,
+  updateRowByColumn,
+  getToken,
+} from "@/lib/sheets/writer";
 import type { GoalRow } from "@/types/models";
 import { nowISO } from "@/lib/sheets/adapters";
+
+const GOAL_HEADERS = [
+  "objetivoId",
+  "nombre",
+  "tipo",
+  "cuentaAhorro",
+  "importeObjetivo",
+  "fechaObjetivo",
+  "prioridad",
+  "saldoActual",
+  "mesesRestantes",
+  "aporteMensual",
+  "estado",
+  "notas",
+  "createdAt",
+  "updatedAt",
+] as const;
 
 function rowToGoal(row: Record<string, string>): GoalRow {
   return {
@@ -76,11 +97,72 @@ export function useCreateGoal(sheetId: string | null) {
         updatedAt: now,
       };
 
-      return createRow(
+      await appendModelRow(
         sheetId,
         SHEET_NAMES.OBJETIVOS,
-        goalSheetSchema,
+        GOAL_HEADERS,
         rowData,
+        token,
+      );
+
+      return rowData;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["goals"] });
+    },
+  });
+}
+
+export function useUpdateGoal(sheetId: string | null) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (data: {
+      objetivoId: string;
+      nombre: string;
+      tipo: string;
+      importeObjetivo: number;
+      fechaObjetivo?: string;
+      prioridad?: string;
+      cuentaAhorro?: string;
+      saldoActual?: number;
+      estado?: string;
+      notas?: string;
+    }) => {
+      if (!sheetId) throw new Error("No sheet connected");
+      const token = getToken();
+      if (!token) throw new Error("No access token");
+
+      const rowIndex = await findRowIndexByColumnValue(
+        sheetId,
+        SHEET_NAMES.OBJETIVOS,
+        "objetivoId",
+        data.objetivoId,
+        token,
+      );
+      if (rowIndex === null) throw new Error("Objetivo no encontrado");
+
+      const now = nowISO();
+
+      const updates: Record<string, string | number | boolean> = {
+        nombre: data.nombre,
+        tipo: data.tipo as GoalRow["tipo"],
+        importeObjetivo: data.importeObjetivo,
+        fechaObjetivo: data.fechaObjetivo ?? "",
+        prioridad: (data.prioridad ?? "Media") as GoalRow["prioridad"],
+        cuentaAhorro: data.cuentaAhorro ?? "",
+        saldoActual: data.saldoActual ?? 0,
+        estado: (data.estado ?? "Activo") as GoalRow["estado"],
+        notas: data.notas ?? "",
+        updatedAt: now,
+      };
+
+      await updateRowByColumn(
+        sheetId,
+        SHEET_NAMES.OBJETIVOS,
+        rowIndex,
+        updates,
+        token,
       );
     },
     onSuccess: () => {
@@ -93,12 +175,27 @@ export function useDeleteGoal(sheetId: string | null) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (rowIndex: number) => {
+    mutationFn: async (objetivoId: string) => {
       if (!sheetId) throw new Error("No sheet connected");
       const token = getToken();
       if (!token) throw new Error("No access token");
 
-      await softDeleteRow(sheetId, SHEET_NAMES.OBJETIVOS, rowIndex, token);
+      const rowIndex = await findRowIndexByColumnValue(
+        sheetId,
+        SHEET_NAMES.OBJETIVOS,
+        "objetivoId",
+        objetivoId,
+        token,
+      );
+      if (rowIndex === null) throw new Error("Objetivo no encontrado");
+
+      await updateRowByColumn(
+        sheetId,
+        SHEET_NAMES.OBJETIVOS,
+        rowIndex,
+        { estado: "Cancelado", updatedAt: nowISO() },
+        token,
+      );
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["goals"] });

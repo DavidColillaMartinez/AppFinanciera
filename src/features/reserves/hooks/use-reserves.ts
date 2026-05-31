@@ -1,10 +1,30 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { SHEET_NAMES } from "@/constants/sheet-structure";
 import { readSheetData } from "@/lib/sheets/reader";
-import { createRow, softDeleteRow, getToken } from "@/lib/sheets/writer";
-import { reserveSheetSchema } from "@/schemas/reserve";
+import {
+  appendModelRow,
+  softDeleteRow,
+  updateRowByColumn,
+  findRowIndexByColumnValue,
+  getToken,
+} from "@/lib/sheets/writer";
 import type { ReserveRow } from "@/types/models";
 import { nowISO } from "@/lib/sheets/adapters";
+
+const RESERVA_HEADERS = [
+  "reservaId",
+  "nombre",
+  "tipo",
+  "importeObjetivo",
+  "saldoActual",
+  "aporteMensualSugerido",
+  "cuentaFisica",
+  "activo",
+  "prioridad",
+  "notas",
+  "createdAt",
+  "updatedAt",
+] as const;
 
 function rowToReserve(row: Record<string, string>): ReserveRow {
   return {
@@ -73,11 +93,67 @@ export function useCreateReserve(sheetId: string | null) {
         updatedAt: now,
       };
 
-      return createRow(
+      return appendModelRow(
         sheetId,
         SHEET_NAMES.RESERVAS,
-        reserveSheetSchema,
+        RESERVA_HEADERS,
         rowData,
+        token,
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["reserves"] });
+    },
+  });
+}
+
+export function useUpdateReserve(sheetId: string | null) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (data: {
+      reservaId: string;
+      nombre: string;
+      tipo: string;
+      importeObjetivo: number;
+      saldoActual?: number;
+      aporteMensualSugerido?: number;
+      cuentaFisica?: string;
+      prioridad?: string;
+      notas?: string;
+    }) => {
+      if (!sheetId) throw new Error("No sheet connected");
+      const token = getToken();
+      if (!token) throw new Error("No access token");
+
+      const rowIndex = await findRowIndexByColumnValue(
+        sheetId,
+        SHEET_NAMES.RESERVAS,
+        "reservaId",
+        data.reservaId,
+        token,
+      );
+      if (rowIndex === null) throw new Error("Reserva no encontrada");
+
+      const now = nowISO();
+      const updates: Record<string, string | number> = {
+        nombre: data.nombre,
+        tipo: data.tipo as ReserveRow["tipo"],
+        importeObjetivo: data.importeObjetivo,
+        saldoActual: data.saldoActual ?? 0,
+        aporteMensualSugerido: data.aporteMensualSugerido ?? 0,
+        cuentaFisica: data.cuentaFisica ?? "",
+        prioridad: (data.prioridad ?? "Media") as ReserveRow["prioridad"],
+        notas: data.notas ?? "",
+        updatedAt: now,
+      };
+
+      await updateRowByColumn(
+        sheetId,
+        SHEET_NAMES.RESERVAS,
+        rowIndex,
+        updates,
+        token,
       );
     },
     onSuccess: () => {
@@ -90,12 +166,27 @@ export function useDeleteReserve(sheetId: string | null) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (rowIndex: number) => {
+    mutationFn: async (reservaId: string) => {
       if (!sheetId) throw new Error("No sheet connected");
       const token = getToken();
       if (!token) throw new Error("No access token");
 
-      await softDeleteRow(sheetId, SHEET_NAMES.RESERVAS, rowIndex, token);
+      const rowIndex = await findRowIndexByColumnValue(
+        sheetId,
+        SHEET_NAMES.RESERVAS,
+        "reservaId",
+        reservaId,
+        token,
+      );
+      if (rowIndex === null) throw new Error("Reserva no encontrada");
+
+      await updateRowByColumn(
+        sheetId,
+        SHEET_NAMES.RESERVAS,
+        rowIndex,
+        { activo: "N", updatedAt: nowISO() },
+        token,
+      );
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["reserves"] });

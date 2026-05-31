@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { SHEET_NAMES } from "@/constants/sheet-structure";
 import { readSheetData } from "@/lib/sheets/reader";
-import { updateRowById, getToken } from "@/lib/sheets/writer";
+import { updateRowByColumn, getToken } from "@/lib/sheets/writer";
 import type { ConfigRow } from "@/types/models";
 
 function rowToConfig(row: Record<string, string>): ConfigRow {
@@ -49,13 +49,11 @@ export function useUpdateConfig(sheetId: string | null) {
       const token = getToken();
       if (!token) throw new Error("No access token");
 
-      const headers = ["Clave", "Valor", "Descripcion"];
-      await updateRowById(
+      await updateRowByColumn(
         sheetId,
         SHEET_NAMES.CONFIG,
         rowIndex,
         { Valor: value },
-        headers,
         token,
       );
     },

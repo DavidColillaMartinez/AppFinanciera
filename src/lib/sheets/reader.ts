@@ -1,4 +1,4 @@
-import { SHEET_NAMES, FIRST_DATA_ROW } from "@/constants/sheet-structure";
+import { FIRST_DATA_ROW } from "@/constants/sheet-structure";
 import { batchGetSheet, SheetsApiError, getToken } from "./client";
 
 export async function readSheetHeaders(
@@ -26,12 +26,11 @@ export async function readSheetData<T>(
   const token = getToken();
   if (!token) throw new Error("No access token");
 
+  const headers = await readSheetHeaders(spreadsheetId, sheetName);
   const range = `${sheetName}!${FIRST_DATA_ROW}:1000`;
   const result = await batchGetSheet(spreadsheetId, range, token);
 
   if (result.values.length === 0) return [];
-
-  const headers = await readSheetHeaders(spreadsheetId, sheetName);
 
   return result.values
     .filter((row) =>
@@ -49,6 +48,7 @@ export async function readSheetData<T>(
 
 export async function validateSheetCompatibility(
   spreadsheetId: string,
+  requiredSheets: string[],
 ): Promise<{ valid: boolean; errors: string[] }> {
   const errors: string[] = [];
   const token = getToken();
@@ -56,8 +56,6 @@ export async function validateSheetCompatibility(
     errors.push("No access token");
     return { valid: false, errors };
   }
-
-  const requiredSheets = Object.values(SHEET_NAMES);
 
   for (const sheetName of requiredSheets) {
     try {

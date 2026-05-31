@@ -1,4 +1,29 @@
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
+
+const STORAGE_KEY = "app_finanzas_state";
+
+export interface DashboardWidget {
+  id: string;
+  visible: boolean;
+}
+
+export interface DashboardConfig {
+  widgets: DashboardWidget[];
+  monthSelectorVisible: boolean;
+}
+
+const DEFAULT_DASHBOARD_CONFIG: DashboardConfig = {
+  widgets: [
+    { id: "balance", visible: true },
+    { id: "savings", visible: true },
+    { id: "income", visible: true },
+    { id: "expenses", visible: true },
+    { id: "chart", visible: true },
+    { id: "detail", visible: true },
+  ],
+  monthSelectorVisible: true,
+};
 
 export interface AppState {
   sheetId: string | null;
@@ -10,6 +35,8 @@ export interface AppState {
   activeMonth: number;
   activeYear: number;
   connectionErrors: string[];
+  hasSeenOnboarding: boolean;
+  dashboardConfig: DashboardConfig;
 }
 
 export interface AppActions {
@@ -18,40 +45,97 @@ export interface AppActions {
   setConfig: (config: Partial<AppState>) => void;
   setConnectionErrors: (errors: string[]) => void;
   clearErrors: () => void;
+  setOnboardingSeen: () => void;
+  setDashboardConfig: (config: Partial<DashboardConfig>) => void;
+  toggleWidget: (widgetId: string) => void;
+  moveWidget: (widgetId: string, direction: "up" | "down") => void;
+  resetDashboardConfig: () => void;
 }
 
-export const useAppStore = create<AppState & AppActions>((set) => ({
-  sheetId: null,
-  sheetUrl: null,
-  isConnected: false,
-  templateVersion: null,
-  appMinVersion: null,
-  currency: "EUR",
-  activeMonth: new Date().getMonth() + 1,
-  activeYear: new Date().getFullYear(),
-  connectionErrors: [],
-
-  setSheetConnection: (sheetId, sheetUrl) =>
-    set({
-      sheetId,
-      sheetUrl,
-      isConnected: true,
-      connectionErrors: [],
-    }),
-
-  disconnect: () =>
-    set({
+export const useAppStore = create<AppState & AppActions>()(
+  persist(
+    (set) => ({
       sheetId: null,
       sheetUrl: null,
       isConnected: false,
       templateVersion: null,
       appMinVersion: null,
+      currency: "EUR",
+      activeMonth: new Date().getMonth() + 1,
+      activeYear: new Date().getFullYear(),
       connectionErrors: [],
+      hasSeenOnboarding: false,
+      dashboardConfig: DEFAULT_DASHBOARD_CONFIG,
+
+      setSheetConnection: (sheetId, sheetUrl) =>
+        set({
+          sheetId,
+          sheetUrl,
+          isConnected: true,
+          connectionErrors: [],
+        }),
+
+      disconnect: () =>
+        set({
+          sheetId: null,
+          sheetUrl: null,
+          isConnected: false,
+          templateVersion: null,
+          appMinVersion: null,
+          connectionErrors: [],
+        }),
+
+      setConfig: (config) => set((state) => ({ ...state, ...config })),
+
+      setConnectionErrors: (errors) => set({ connectionErrors: errors }),
+
+      clearErrors: () => set({ connectionErrors: [] }),
+
+      setOnboardingSeen: () => set({ hasSeenOnboarding: true }),
+
+      setDashboardConfig: (config) =>
+        set((state) => ({
+          dashboardConfig: { ...state.dashboardConfig, ...config },
+        })),
+
+      toggleWidget: (widgetId) =>
+        set((state) => ({
+          dashboardConfig: {
+            ...state.dashboardConfig,
+            widgets: state.dashboardConfig.widgets.map((w) =>
+              w.id === widgetId ? { ...w, visible: !w.visible } : w,
+            ),
+          },
+        })),
+
+      moveWidget: (widgetId, direction) =>
+        set((state) => {
+          const widgets = [...state.dashboardConfig.widgets];
+          const idx = widgets.findIndex((w) => w.id === widgetId);
+          if (idx === -1) return state;
+          const newIdx = direction === "up" ? idx - 1 : idx + 1;
+          if (newIdx < 0 || newIdx >= widgets.length) return state;
+          [widgets[idx], widgets[newIdx]] = [widgets[newIdx], widgets[idx]];
+          return {
+            dashboardConfig: { ...state.dashboardConfig, widgets },
+          };
+        }),
+
+      resetDashboardConfig: () =>
+        set({ dashboardConfig: DEFAULT_DASHBOARD_CONFIG }),
     }),
-
-  setConfig: (config) => set((state) => ({ ...state, ...config })),
-
-  setConnectionErrors: (errors) => set({ connectionErrors: errors }),
-
-  clearErrors: () => set({ connectionErrors: [] }),
-}));
+    {
+      name: STORAGE_KEY,
+      partialize: (state) => ({
+        sheetId: state.sheetId,
+        sheetUrl: state.sheetUrl,
+        isConnected: state.isConnected,
+        currency: state.currency,
+        activeMonth: state.activeMonth,
+        activeYear: state.activeYear,
+        hasSeenOnboarding: state.hasSeenOnboarding,
+        dashboardConfig: state.dashboardConfig,
+      }),
+    },
+  ),
+);

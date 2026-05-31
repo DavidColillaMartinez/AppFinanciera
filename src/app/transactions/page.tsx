@@ -4,25 +4,47 @@ import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { TransactionForm } from "@/features/transactions/components/transaction-form";
-import { useTransactions } from "@/features/transactions/hooks/use-transactions";
+import {
+  useTransactions,
+  useDeleteTransaction,
+  useUpdateTransaction,
+} from "@/features/transactions/hooks/use-transactions";
+import { useCategories } from "@/features/categories/hooks/use-categories";
+import { useAccounts } from "@/features/accounts/hooks/use-accounts";
 import { useAppStore } from "@/stores/app-store";
 import { EmptyState } from "@/components/states/empty-state";
 import { LoadingState } from "@/components/states/loading-state";
 import { ErrorState } from "@/components/states/error-state";
-import { PlusIcon } from "lucide-react";
+import { PlusIcon, PencilIcon, TrashIcon, XIcon } from "lucide-react";
 import {
   calculateMonthlyBalance,
   calculateMonthlyIncome,
   calculateMonthlyExpenses,
 } from "@/lib/finance/calculations";
+import { TransactionType } from "@/constants/enums";
+
+const typeOptions = [
+  { value: "", label: "Todos" },
+  { value: TransactionType.INGRESO, label: "Ingreso" },
+  { value: TransactionType.GASTO, label: "Gasto" },
+  { value: TransactionType.AHORRO, label: "Ahorro" },
+  { value: TransactionType.TRANSFERENCIA_INTERNA, label: "Transferencia" },
+];
 
 export default function TransactionsPage() {
   const { sheetId } = useAppStore();
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedMonth, setSelectedMonth] = useState<string>(
     new Date().toISOString().slice(0, 7),
   );
+  const [filterType, setFilterType] = useState("");
+  const [filterCategory, setFilterCategory] = useState("");
+  const [filterAccount, setFilterAccount] = useState("");
+  const [search, setSearch] = useState("");
 
   const {
     data: transactions,
@@ -30,24 +52,89 @@ export default function TransactionsPage() {
     isError,
     error,
   } = useTransactions(sheetId, selectedMonth);
+  const { data: categories } = useCategories(sheetId);
+  const { data: accounts } = useAccounts(sheetId);
+  const deleteTransaction = useDeleteTransaction(sheetId);
+  const updateTransaction = useUpdateTransaction(sheetId);
 
-  const filteredTransactions = transactions ?? [];
+  const categoryOptions = [
+    { value: "", label: "Todas" },
+    ...(categories ?? []).map((c) => ({ value: c.nombre, label: c.nombre })),
+  ];
+
+  const accountOptions = [
+    { value: "", label: "Todas" },
+    ...(accounts ?? []).map((a) => ({ value: a.nombre, label: a.nombre })),
+  ];
+
+  let filtered = transactions ?? [];
+
+  if (filterType) {
+    filtered = filtered.filter((t) => t.tipo === filterType);
+  }
+  if (filterCategory) {
+    filtered = filtered.filter((t) => t.categoria === filterCategory);
+  }
+  if (filterAccount) {
+    filtered = filtered.filter(
+      (t) =>
+        t.cuentaOrigen === filterAccount || t.cuentaDestino === filterAccount,
+    );
+  }
+  if (search) {
+    const q = search.toLowerCase();
+    filtered = filtered.filter(
+      (t) =>
+        t.concepto.toLowerCase().includes(q) ||
+        t.notas.toLowerCase().includes(q),
+    );
+  }
 
   const balance = calculateMonthlyBalance(
-    filteredTransactions.map((t) => ({ tipo: t.tipo, importe: t.importe })),
+    filtered.map((t) => ({ tipo: t.tipo, importe: t.importe })),
   );
   const income = calculateMonthlyIncome(
-    filteredTransactions.map((t) => ({ tipo: t.tipo, importe: t.importe })),
+    filtered.map((t) => ({ tipo: t.tipo, importe: t.importe })),
   );
   const expenses = calculateMonthlyExpenses(
-    filteredTransactions.map((t) => ({ tipo: t.tipo, importe: t.importe })),
+    filtered.map((t) => ({ tipo: t.tipo, importe: t.importe })),
   );
+
+  const editingTransaction = editingId
+    ? filtered.find((t) => t.id === editingId)
+    : null;
+
+  async function handleDelete(id: string) {
+    if (!confirm("Borrar este movimiento?")) return;
+    try {
+      await deleteTransaction.mutateAsync(id);
+    } catch (e) {
+      console.error("Error deleting:", e);
+    }
+  }
+
+  async function handleEditSave(
+    data: Parameters<typeof updateTransaction.mutateAsync>[0],
+  ) {
+    try {
+      await updateTransaction.mutateAsync(data);
+      setEditingId(null);
+    } catch (e) {
+      console.error("Error updating:", e);
+    }
+  }
 
   return (
     <div className="px-4 py-6 space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold tracking-tight">Movimientos</h1>
-        <Button size="sm" onClick={() => setShowForm(!showForm)}>
+        <Button
+          size="sm"
+          onClick={() => {
+            setEditingId(null);
+            setShowForm(!showForm);
+          }}
+        >
           <PlusIcon className="h-4 w-4 mr-1" />
           Nuevo
         </Button>
@@ -58,7 +145,28 @@ export default function TransactionsPage() {
           type="month"
           value={selectedMonth}
           onChange={(e) => setSelectedMonth(e.target.value)}
-          className="rounded-lg border border-input bg-background px-3 py-2 text-sm"
+          className="rounded-lg border border-input bg-background px-3 py-2 text-sm flex-1"
+        />
+        <Input
+          placeholder="Buscar..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="flex-1"
+        />
+      </div>
+
+      <div className="flex gap-2">
+        <Select
+          options={typeOptions}
+          value={filterType}
+          onChange={(e) => setFilterType(e.target.value)}
+          className="flex-1"
+        />
+        <Select
+          options={categoryOptions}
+          value={filterCategory}
+          onChange={(e) => setFilterCategory(e.target.value)}
+          className="flex-1"
         />
       </div>
 
@@ -91,11 +199,27 @@ export default function TransactionsPage() {
         </Card>
       </div>
 
-      {showForm && (
+      {showForm && !editingId && (
         <TransactionForm
           sheetId={sheetId}
+          categories={categories ?? []}
+          accounts={accounts ?? []}
           onSuccess={() => setShowForm(false)}
           onCancel={() => setShowForm(false)}
+        />
+      )}
+
+      {editingId && editingTransaction && (
+        <TransactionForm
+          sheetId={sheetId}
+          categories={categories ?? []}
+          accounts={accounts ?? []}
+          initialData={editingTransaction}
+          onSuccess={() => {
+            setEditingId(null);
+            setShowForm(false);
+          }}
+          onCancel={() => setEditingId(null)}
         />
       )}
 
@@ -105,7 +229,7 @@ export default function TransactionsPage() {
         <ErrorState message={(error as Error)?.message ?? "Error al cargar"} />
       )}
 
-      {!isLoading && !isError && filteredTransactions.length === 0 && (
+      {!isLoading && !isError && filtered.length === 0 && (
         <EmptyState
           title="Sin movimientos"
           description={`No hay movimientos para ${selectedMonth}. Empieza añadiendo el primero.`}
@@ -113,9 +237,9 @@ export default function TransactionsPage() {
         />
       )}
 
-      {!isLoading && !isError && filteredTransactions.length > 0 && (
+      {!isLoading && !isError && filtered.length > 0 && (
         <div className="space-y-2">
-          {filteredTransactions.map((t) => (
+          {filtered.map((t) => (
             <Card key={t.id}>
               <CardContent className="p-4">
                 <div className="flex items-start justify-between gap-3">
@@ -129,7 +253,7 @@ export default function TransactionsPage() {
                           t.tipo === "Ingreso"
                             ? "success"
                             : t.tipo === "Gasto"
-                              ? "danger"
+                              ? "destructive"
                               : "outline"
                         }
                       >
@@ -137,10 +261,27 @@ export default function TransactionsPage() {
                       </Badge>
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">
-                      {t.fecha} {t.categoria && `· ${t.categoria}`}
+                      {t.fecha}
+                      {t.categoria && ` · ${t.categoria}`}
+                      {t.cuentaOrigen && ` · ${t.cuentaOrigen}`}
                     </p>
                   </div>
-                  <div className="text-right">
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        setEditingId(t.id);
+                        setShowForm(false);
+                      }}
+                      className="p-1.5 rounded-md hover:bg-muted transition-colors"
+                    >
+                      <PencilIcon className="h-4 w-4 text-muted-foreground" />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(t.id)}
+                      className="p-1.5 rounded-md hover:bg-muted transition-colors"
+                    >
+                      <TrashIcon className="h-4 w-4 text-destructive" />
+                    </button>
                     <p
                       className={`font-semibold ${
                         t.tipo === "Ingreso"

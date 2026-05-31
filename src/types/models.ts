@@ -31,6 +31,7 @@ export interface TransactionRow {
   reservaId: string;
   createdAt: string;
   updatedAt: string;
+  deletedAt: string;
 }
 
 export interface CategoryRow {

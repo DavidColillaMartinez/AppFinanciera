@@ -21,6 +21,7 @@ export const transactionSchema = z.object({
   reservaId: z.string().max(100).optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
+  deletedAt: z.string().optional(),
 });
 
 export type TransactionInput = z.infer<typeof transactionSchema>;
@@ -29,15 +30,20 @@ export const transactionCreateSchema = transactionSchema.omit({
   id: true,
   createdAt: true,
   updatedAt: true,
+  deletedAt: true,
   mesClave: true,
 });
 
 export type TransactionCreateInput = z.infer<typeof transactionCreateSchema>;
 
-export const transactionSheetSchema = transactionSchema.omit({
+export const transactionUpdateSchema = transactionSchema.omit({
   id: true,
+  createdAt: true,
+  deletedAt: true,
 });
 
-export const transactionUpdateSchema = transactionSchema.partial();
-
 export type TransactionUpdateInput = z.infer<typeof transactionUpdateSchema>;
+
+export const transactionSheetSchema = transactionSchema;
+
+export type TransactionSheetRow = z.infer<typeof transactionSheetSchema>;

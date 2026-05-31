@@ -11,6 +11,54 @@ export const SHEET_NAMES = {
   PAGOS_APLAZADOS: "Pagos_aplazados",
 } as const;
 
+export const MOVIMIENTOS_HEADERS = [
+  "id",
+  "fecha",
+  "mesClave",
+  "concepto",
+  "tipo",
+  "categoria",
+  "importe",
+  "metodo",
+  "cuentaOrigen",
+  "cuentaDestino",
+  "notas",
+  "reservaId",
+  "createdAt",
+  "updatedAt",
+  "deletedAt",
+] as const;
+
+export const CATEGORIAS_HEADERS = [
+  "categoriaId",
+  "nombre",
+  "presupuestoMensual",
+  "tipoHabitual",
+  "activo",
+  "grupo",
+  "color",
+  "icono",
+  "orden",
+  "notas",
+  "createdAt",
+  "updatedAt",
+] as const;
+
+export const CUENTAS_HEADERS = [
+  "cuentaId",
+  "nombre",
+  "tipo",
+  "moneda",
+  "saldoInicial",
+  "saldoActualManual",
+  "incluirDashboard",
+  "activo",
+  "color",
+  "notas",
+  "createdAt",
+  "updatedAt",
+] as const;
+
 export const SHEET_LEGACY = {
   LEEME: "00_LEEME",
   DASHBOARD: "Dashboard",

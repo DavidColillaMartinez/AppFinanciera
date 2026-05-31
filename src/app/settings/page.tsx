@@ -4,27 +4,18 @@ import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select } from "@/components/ui/select";
 import { CategoryForm } from "@/features/categories/components/category-form";
-import { useCategories } from "@/features/categories/hooks/use-categories";
-import { useAccounts } from "@/features/accounts/hooks/use-accounts";
-import { useConfig } from "@/features/config/hooks/use-config";
+import {
+  useCategories,
+  useDeleteCategory,
+  useUpdateCategory,
+} from "@/features/categories/hooks/use-categories";
 import { useAppStore } from "@/stores/app-store";
 import { EmptyState } from "@/components/states/empty-state";
 import { LoadingState } from "@/components/states/loading-state";
 import { ErrorState } from "@/components/states/error-state";
-import { PlusIcon } from "lucide-react";
-
-const CURRENCIES = [
-  { value: "EUR", label: "Euro (EUR)" },
-  { value: "USD", label: "Dolar (USD)" },
-  { value: "GBP", label: "Libra (GBP)" },
-  { value: "JPY", label: "Yen (JPY)" },
-  { value: "MXN", label: "Peso Mexicano (MXN)" },
-  { value: "ARS", label: "Peso Argentino (ARS)" },
-];
+import { PlusIcon, PencilIcon, TrashIcon } from "lucide-react";
+import type { CategoryRow } from "@/types/models";
 
 export default function SettingsPage() {
   const { sheetId } = useAppStore();
@@ -32,24 +23,28 @@ export default function SettingsPage() {
     "categorias",
   );
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const {
     data: categories,
-    isLoading: loadingCategories,
-    isError: errorCategories,
-    error: categoriesError,
+    isLoading,
+    isError,
+    error,
   } = useCategories(sheetId);
+  const deleteCategory = useDeleteCategory(sheetId);
 
-  const { data: accounts } = useAccounts(sheetId);
+  const editingCategory = editingId
+    ? (categories ?? []).find((c) => c.categoriaId === editingId)
+    : null;
 
-  const { data: config, isLoading: loadingConfig } = useConfig(sheetId);
-
-  const filteredCategories = categories ?? [];
-
-  const accountOptions = (accounts ?? []).map((a) => ({
-    value: a.cuentaId,
-    label: a.nombre,
-  }));
+  async function handleDelete(categoriaId: string) {
+    if (!confirm("Desactivar esta categoria?")) return;
+    try {
+      await deleteCategory.mutateAsync(categoriaId);
+    } catch (e) {
+      console.error("Error:", e);
+    }
+  }
 
   return (
     <div className="px-4 py-6 space-y-4">
@@ -83,13 +78,19 @@ export default function SettingsPage() {
       {activeTab === "categorias" && (
         <div className="space-y-4">
           <div className="flex justify-end">
-            <Button size="sm" onClick={() => setShowForm(!showForm)}>
+            <Button
+              size="sm"
+              onClick={() => {
+                setEditingId(null);
+                setShowForm(!showForm);
+              }}
+            >
               <PlusIcon className="h-4 w-4 mr-1" />
               Nueva
             </Button>
           </div>
 
-          {showForm && (
+          {showForm && !editingId && (
             <CategoryForm
               sheetId={sheetId}
               onSuccess={() => setShowForm(false)}
@@ -97,51 +98,57 @@ export default function SettingsPage() {
             />
           )}
 
-          {loadingCategories && (
-            <LoadingState message="Cargando categorias..." />
-          )}
-
-          {errorCategories && (
-            <ErrorState
-              message={(categoriesError as Error)?.message ?? "Error al cargar"}
+          {editingId && editingCategory && (
+            <CategoryForm
+              sheetId={sheetId}
+              initialData={editingCategory}
+              onSuccess={() => {
+                setEditingId(null);
+                setShowForm(false);
+              }}
+              onCancel={() => setEditingId(null)}
             />
           )}
 
-          {!loadingCategories &&
-            !errorCategories &&
-            filteredCategories.length === 0 && (
-              <EmptyState
-                title="Sin categorias"
-                description="Añade categorias para organizar tus movimientos."
-                type="empty"
-              />
-            )}
+          {isLoading && <LoadingState message="Cargando categorias..." />}
 
-          {!loadingCategories &&
-            !errorCategories &&
-            filteredCategories.length > 0 && (
-              <div className="space-y-2">
-                {filteredCategories.map((cat) => (
-                  <div
-                    key={cat.categoriaId}
-                    className="flex items-center justify-between p-3 rounded-lg border"
-                  >
-                    <div className="flex items-center gap-3">
-                      {cat.color && (
-                        <div
-                          className="w-3 h-3 rounded-full"
-                          style={{ backgroundColor: cat.color }}
-                        />
-                      )}
-                      <div>
-                        <p className="font-medium text-sm">{cat.nombre}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {cat.grupo && `${cat.grupo} · `}
-                          Presupuesto:{" "}
-                          {Number(cat.presupuestoMensual).toFixed(2)}
-                        </p>
-                      </div>
+          {isError && (
+            <ErrorState
+              message={(error as Error)?.message ?? "Error al cargar"}
+            />
+          )}
+
+          {!isLoading && !isError && (categories ?? []).length === 0 && (
+            <EmptyState
+              title="Sin categorias"
+              description="Añade categorias para organizar tus movimientos."
+              type="empty"
+            />
+          )}
+
+          {!isLoading && !isError && (categories ?? []).length > 0 && (
+            <div className="space-y-2">
+              {(categories ?? []).map((cat) => (
+                <div
+                  key={cat.categoriaId}
+                  className="flex items-center justify-between p-3 rounded-lg border"
+                >
+                  <div className="flex items-center gap-3">
+                    {cat.color && (
+                      <div
+                        className="w-3 h-3 rounded-full shrink-0"
+                        style={{ backgroundColor: cat.color }}
+                      />
+                    )}
+                    <div>
+                      <p className="font-medium text-sm">{cat.nombre}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {cat.grupo && `${cat.grupo} · `}
+                        Presupuesto: {Number(cat.presupuestoMensual).toFixed(2)}
+                      </p>
                     </div>
+                  </div>
+                  <div className="flex items-center gap-2">
                     <Badge
                       variant={
                         cat.tipoHabitual === "Ingreso" ? "success" : "outline"
@@ -149,10 +156,26 @@ export default function SettingsPage() {
                     >
                       {cat.tipoHabitual}
                     </Badge>
+                    <button
+                      onClick={() => {
+                        setEditingId(cat.categoriaId);
+                        setShowForm(false);
+                      }}
+                      className="p-1.5 rounded-md hover:bg-muted transition-colors"
+                    >
+                      <PencilIcon className="h-4 w-4 text-muted-foreground" />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(cat.categoriaId)}
+                      className="p-1.5 rounded-md hover:bg-muted transition-colors"
+                    >
+                      <TrashIcon className="h-4 w-4 text-destructive" />
+                    </button>
                   </div>
-                ))}
-              </div>
-            )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -160,57 +183,14 @@ export default function SettingsPage() {
         <div className="space-y-4">
           <Card>
             <CardContent className="p-4 space-y-4">
-              <h2 className="text-base font-semibold">
-                Preferencias generales
-              </h2>
-
-              {loadingConfig ? (
-                <LoadingState message="Cargando..." />
-              ) : (
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="currency">Moneda principal</Label>
-                    <Select
-                      id="currency"
-                      options={CURRENCIES}
-                      value={config?.MONEDA ?? "EUR"}
-                      onChange={(e) => {
-                        console.log("Currency changed:", e.target.value);
-                      }}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="defaultAccount">
-                      Cuenta predeterminada
-                    </Label>
-                    <Select
-                      id="defaultAccount"
-                      options={[
-                        { value: "", label: "Ninguna" },
-                        ...accountOptions,
-                      ]}
-                      value={config?.CUENTA_DEFAULT ?? ""}
-                      onChange={(e) => {
-                        console.log("Account changed:", e.target.value);
-                      }}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="sheetId">ID de spreadsheet</Label>
-                    <Input
-                      id="sheetId"
-                      value={sheetId ?? ""}
-                      disabled
-                      className="text-sm"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Conecta tu hoja de calculo en la pagina de onboarding.
-                    </p>
-                  </div>
-                </div>
-              )}
+              <h2 className="text-base font-semibold">Informacion</h2>
+              <p className="text-sm text-muted-foreground">
+                La configuracion de moneda y cuenta predeterminada se guardara
+                en tu Google Sheet cuando este disponible.
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Version de la app: 1.0.0
+              </p>
             </CardContent>
           </Card>
         </div>

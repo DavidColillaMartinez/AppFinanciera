@@ -1,8 +1,13 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { SHEET_NAMES } from "@/constants/sheet-structure";
+import { SHEET_NAMES, CUENTAS_HEADERS } from "@/constants/sheet-structure";
 import { readSheetData } from "@/lib/sheets/reader";
-import { createRow, softDeleteRow, getToken } from "@/lib/sheets/writer";
-import { accountSheetSchema } from "@/schemas/account";
+import {
+  appendModelRow,
+  softDeleteRow,
+  findRowIndexByColumnValue,
+  updateRowByColumn,
+  getToken,
+} from "@/lib/sheets/writer";
 import type { AccountRow } from "@/types/models";
 import { nowISO } from "@/lib/sheets/adapters";
 
@@ -10,7 +15,7 @@ function rowToAccount(row: Record<string, string>): AccountRow {
   return {
     cuentaId: row.cuentaId ?? "",
     nombre: row.nombre ?? "",
-    tipo: (row.tipo as AccountRow["tipo"]) ?? "Bancaria",
+    tipo: (row.tipo as AccountRow["tipo"]) ?? "Banco",
     moneda: row.moneda ?? "EUR",
     saldoInicial: Number(row.saldoInicial) || 0,
     saldoActualManual: Number(row.saldoActualManual) || 0,
@@ -70,17 +75,78 @@ export function useCreateAccount(sheetId: string | null) {
           ? "S"
           : "N") as AccountRow["incluirDashboard"],
         activo: "S" as const,
-        color: data.color ?? "",
+        color: data.color ?? "#10B981",
         notas: data.notas ?? "",
         createdAt: now,
         updatedAt: now,
       };
 
-      return createRow(
+      await appendModelRow(
         sheetId,
         SHEET_NAMES.CUENTAS,
-        accountSheetSchema,
+        CUENTAS_HEADERS,
         rowData,
+        token,
+      );
+
+      return rowData;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["accounts"] });
+    },
+  });
+}
+
+export function useUpdateAccount(sheetId: string | null) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (data: {
+      cuentaId: string;
+      nombre: string;
+      tipo: string;
+      moneda?: string;
+      saldoInicial?: number;
+      saldoActualManual?: number;
+      incluirDashboard?: boolean;
+      color?: string;
+      notas?: string;
+    }) => {
+      if (!sheetId) throw new Error("No sheet connected");
+      const token = getToken();
+      if (!token) throw new Error("No access token");
+
+      const rowIndex = await findRowIndexByColumnValue(
+        sheetId,
+        SHEET_NAMES.CUENTAS,
+        "cuentaId",
+        data.cuentaId,
+        token,
+      );
+      if (rowIndex === null) throw new Error("Cuenta no encontrada");
+
+      const now = nowISO();
+
+      const updates = {
+        nombre: data.nombre,
+        tipo: data.tipo as AccountRow["tipo"],
+        moneda: data.moneda ?? "EUR",
+        saldoInicial: data.saldoInicial ?? 0,
+        saldoActualManual: data.saldoActualManual ?? 0,
+        incluirDashboard: (data.incluirDashboard
+          ? "S"
+          : "N") as AccountRow["incluirDashboard"],
+        color: data.color ?? "",
+        notas: data.notas ?? "",
+        updatedAt: now,
+      };
+
+      await updateRowByColumn(
+        sheetId,
+        SHEET_NAMES.CUENTAS,
+        rowIndex,
+        updates,
+        token,
       );
     },
     onSuccess: () => {
@@ -93,12 +159,27 @@ export function useDeleteAccount(sheetId: string | null) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (rowIndex: number) => {
+    mutationFn: async (cuentaId: string) => {
       if (!sheetId) throw new Error("No sheet connected");
       const token = getToken();
       if (!token) throw new Error("No access token");
 
-      await softDeleteRow(sheetId, SHEET_NAMES.CUENTAS, rowIndex, token);
+      const rowIndex = await findRowIndexByColumnValue(
+        sheetId,
+        SHEET_NAMES.CUENTAS,
+        "cuentaId",
+        cuentaId,
+        token,
+      );
+      if (rowIndex === null) throw new Error("Cuenta no encontrada");
+
+      await updateRowByColumn(
+        sheetId,
+        SHEET_NAMES.CUENTAS,
+        rowIndex,
+        { activo: "N", updatedAt: nowISO() },
+        token,
+      );
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
