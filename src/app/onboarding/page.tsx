@@ -92,7 +92,7 @@ function OnboardingContent() {
         return;
       }
 
-      const { valid, errors } = await validateSheetCompatibility(
+      const { valid, errors, warnings } = await validateSheetCompatibility(
         parsed,
         Object.values(SHEET_NAMES),
       );
@@ -100,22 +100,32 @@ function OnboardingContent() {
       if (!valid) {
         const missingSheets = errors
           .filter((e) => e.includes("no encontrada"))
+          .map((e) => e.replace('no encontrada', 'no encontrada').replace('Hoja "', '').replace('"', ''))
           .join(", ");
-        const emptySheets = errors
-          .filter((e) => e.includes("vacia"))
-          .join(", ");
+        const missingCols = errors.filter((e) => e.includes("faltan columnas"));
+        const permissionErrors = errors.filter((e) => e.includes("Sin permisos"));
 
-        if (missingSheets) {
+        if (permissionErrors.length > 0) {
+          setError(
+            `Sin permisos de lectura. Comparte la hoja con tu cuenta de Google.`,
+          );
+        } else if (missingSheets) {
           setError(
             `Faltan hojas en tu Sheet: ${missingSheets}. Asegurate de usar la plantilla correcta.`,
           );
-        } else if (emptySheets) {
-          setError(`Hojas sin encabezados: ${emptySheets}.`);
+        } else if (missingCols.length > 0) {
+          setError(
+            `Faltan columnas en tu Sheet:\n${missingCols.map((e) => `• ${e}`).join("\n")}\n\nDescarga la plantilla actualizada.`,
+          );
         } else {
           setError(`Problemas con la Sheet: ${errors.join("; ")}`);
         }
         setStep("sheet");
         return;
+      }
+
+      if (warnings.length > 0) {
+        console.warn("Sheet compatibility warnings:", warnings);
       }
 
       setSheetConnection(

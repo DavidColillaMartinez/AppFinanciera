@@ -1,4 +1,14 @@
-import { FIRST_DATA_ROW } from "@/constants/sheet-structure";
+import {
+  FIRST_DATA_ROW,
+  SHEET_NAMES,
+  MOVIMIENTOS_HEADERS,
+  CATEGORIAS_HEADERS,
+  CUENTAS_HEADERS,
+  GASTOS_FIJOS_HEADERS,
+  PAGOS_FUTUROS_HEADERS,
+  PAGOS_APLAZADOS_HEADERS,
+  MOV_RESERVAS_HEADERS,
+} from "@/constants/sheet-structure";
 import { batchGetSheet, SheetsApiError, getToken } from "./client";
 
 export async function readSheetHeaders(
@@ -46,28 +56,77 @@ export async function readSheetData<T>(
     .map((obj) => rowAdapter(obj, headers));
 }
 
+const SHEET_REQUIRED_HEADERS: Record<string, string[]> = {
+  [SHEET_NAMES.MOVIMIENTOS]: [...MOVIMIENTOS_HEADERS],
+  [SHEET_NAMES.CATEGORIAS]: [...CATEGORIAS_HEADERS],
+  [SHEET_NAMES.CUENTAS]: [...CUENTAS_HEADERS],
+  [SHEET_NAMES.GASTOS_FIJOS]: [...GASTOS_FIJOS_HEADERS],
+  [SHEET_NAMES.PAGOS_FUTUROS]: [...PAGOS_FUTUROS_HEADERS],
+  [SHEET_NAMES.PAGOS_APLAZADOS]: [...PAGOS_APLAZADOS_HEADERS],
+  [SHEET_NAMES.RESERVAS]: ["reservaId", "nombre", "tipo", "importeObjetivo", "saldoActual", "activo"],
+  [SHEET_NAMES.OBJETIVOS]: ["objetivoId", "nombre", "tipo", "importeObjetivo", "estado"],
+  [SHEET_NAMES.MOV_RESERVAS]: [...MOV_RESERVAS_HEADERS],
+  [SHEET_NAMES.CONFIG]: ["Clave", "Valor"],
+};
+
 export async function validateSheetCompatibility(
   spreadsheetId: string,
-  requiredSheets: string[],
-): Promise<{ valid: boolean; errors: string[] }> {
+  requiredSheets?: string[],
+): Promise<{ valid: boolean; errors: string[]; warnings: string[] }> {
   const errors: string[] = [];
+  const warnings: string[] = [];
   const token = getToken();
   if (!token) {
-    errors.push("No access token");
-    return { valid: false, errors };
+    errors.push("No access token. Por favor, conecta con Google.");
+    return { valid: false, errors, warnings };
   }
 
-  for (const sheetName of requiredSheets) {
+  const sheetsToCheck = requiredSheets ?? Object.values(SHEET_NAMES);
+
+  for (const sheetName of sheetsToCheck) {
+    const requiredHeaders = SHEET_REQUIRED_HEADERS[sheetName];
+    if (!requiredHeaders) continue;
+
     try {
       const headers = await readSheetHeaders(spreadsheetId, sheetName);
+
       if (headers.length === 0) {
-        errors.push(`Hoja "${sheetName}" vacia o sin encabezados`);
+        errors.push(
+          `Hoja "${sheetName}" no tiene encabezados. Asegurate de que la hoja existe y tiene datos.`,
+        );
+        continue;
+      }
+
+      const missingHeaders = requiredHeaders.filter(
+        (h) => !headers.includes(h),
+      );
+      if (missingHeaders.length > 0) {
+        errors.push(
+          `Hoja "${sheetName}" faltan columnas: ${missingHeaders.join(", ")}`,
+        );
+      }
+
+      const extraHeaders = headers.filter(
+        (h) => !requiredHeaders.includes(h) && !h.startsWith("_"),
+      );
+      if (extraHeaders.length > 0 && missingHeaders.length === 0) {
+        warnings.push(
+          `Hoja "${sheetName}" tiene columnas extra no reconocidas: ${extraHeaders.join(", ")}. Pueden ignorarse.`,
+        );
       }
     } catch (e) {
       if (e instanceof SheetsApiError && e.isNotFoundError()) {
-        errors.push(`Hoja "${sheetName}" no encontrada`);
+        errors.push(
+          `Hoja "${sheetName}" no encontrada. Crea la hoja en tu documento Google Sheets.`,
+        );
+      } else if (e instanceof SheetsApiError && e.isPermissionError()) {
+        errors.push(
+          `Sin permisos para leer "${sheetName}". Comparte la hoja con la cuenta de Google usada.`,
+        );
       } else {
-        errors.push(`Error al leer "${sheetName}": ${(e as Error).message}`);
+        errors.push(
+          `Error al leer "${sheetName}": ${(e as Error).message}`,
+        );
       }
     }
   }
@@ -75,5 +134,6 @@ export async function validateSheetCompatibility(
   return {
     valid: errors.length === 0,
     errors,
+    warnings,
   };
 }

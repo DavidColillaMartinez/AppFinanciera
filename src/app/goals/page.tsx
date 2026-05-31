@@ -13,7 +13,8 @@ import { LoadingState } from "@/components/states/loading-state";
 import { ErrorState } from "@/components/states/error-state";
 import { ReserveForm } from "@/features/reserves/components/reserve-form";
 import { GoalForm } from "@/features/goals/components/goal-form";
-import { Pencil, Trash2, Plus } from "lucide-react";
+import { ReserveMovements } from "@/features/reserve-movements/components/reserve-movements-list";
+import { Pencil, Trash2, Plus, History } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -33,6 +34,7 @@ export default function GoalsPage() {
   const [editingReserve, setEditingReserve] = useState<ReserveRow | null>(null);
   const [showGoalForm, setShowGoalForm] = useState(false);
   const [editingGoal, setEditingGoal] = useState<GoalRow | null>(null);
+  const [viewingMovements, setViewingMovements] = useState<{ id: string; nombre: string } | null>(null);
 
   const {
     data: reserves,
@@ -214,10 +216,26 @@ export default function GoalsPage() {
                         </span>
                       </div>
                       <Progress value={progress} className="h-2" />
-                      <p className="text-xs text-muted-foreground">
-                        {progress.toFixed(1)}% · Aporte sugerido:{" "}
-                        {reserve.aporteMensualSugerido.toFixed(2)}/mes
-                      </p>
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs text-muted-foreground">
+                          {progress.toFixed(1)}% · Aporte sugerido:{" "}
+                          {reserve.aporteMensualSugerido.toFixed(2)}/mes
+                        </p>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 gap-1 text-xs"
+                          onClick={() =>
+                            setViewingMovements({
+                              id: reserve.reservaId,
+                              nombre: reserve.nombre,
+                            })
+                          }
+                        >
+                          <History className="h-3 w-3" />
+                          Mov.
+                        </Button>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
@@ -318,6 +336,24 @@ export default function GoalsPage() {
             onSuccess={closeGoalForm}
             onCancel={closeGoalForm}
           />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!viewingMovements}
+        onOpenChange={(open) => !open && setViewingMovements(null)}
+      >
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Movimientos de reserva</DialogTitle>
+          </DialogHeader>
+          {viewingMovements && (
+            <ReserveMovements
+              reservaId={viewingMovements.id}
+              reservaNombre={viewingMovements.nombre}
+              onClose={() => setViewingMovements(null)}
+            />
+          )}
         </DialogContent>
       </Dialog>
     </div>
