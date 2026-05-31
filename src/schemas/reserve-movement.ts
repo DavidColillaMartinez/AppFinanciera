@@ -10,9 +10,9 @@ export const reserveMovementSchema = z.object({
     ReserveMovementType.DISPOSICION,
   ]),
   importe: z.number().positive(),
-  cuentaOrigen: z.string().max(100).optional().default(""),
-  cuentaDestino: z.string().max(100).optional().default(""),
-  notas: z.string().max(500).optional().default(""),
+  cuentaOrigen: z.string().max(100).optional(),
+  cuentaDestino: z.string().max(100).optional(),
+  notas: z.string().max(500).optional(),
   createdAt: z.string(),
 });
 
@@ -32,3 +32,7 @@ export const reserveMovementUpdateSchema = reserveMovementSchema.partial();
 export type ReserveMovementUpdateInput = z.infer<
   typeof reserveMovementUpdateSchema
 >;
+
+export const reserveMovementSheetSchema = reserveMovementSchema.omit({
+  id: true,
+});

@@ -14,10 +14,10 @@ export const reserveSchema = z.object({
   importeObjetivo: z.number().min(0),
   saldoActual: z.number().min(0),
   aporteMensualSugerido: z.number().min(0),
-  cuentaFisica: z.string().max(100).optional().default(""),
+  cuentaFisica: z.string().max(100).optional(),
   activo: z.enum(["S", "N"]),
   prioridad: z.enum([Priority.ALTA, Priority.MEDIA, Priority.BAJA]),
-  notas: z.string().max(500).optional().default(""),
+  notas: z.string().max(500).optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -35,3 +35,7 @@ export type ReserveCreateInput = z.infer<typeof reserveCreateSchema>;
 export const reserveUpdateSchema = reserveSchema.partial();
 
 export type ReserveUpdateInput = z.infer<typeof reserveUpdateSchema>;
+
+export const reserveSheetSchema = reserveSchema.omit({
+  reservaId: true,
+});

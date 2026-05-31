@@ -3,7 +3,7 @@ import { z } from "zod";
 export const configSchema = z.object({
   Clave: z.string().min(1),
   Valor: z.string(),
-  Descripcion: z.string().optional().default(""),
+  Descripcion: z.string().optional(),
 });
 
 export type ConfigRow = z.infer<typeof configSchema>;
@@ -18,3 +18,5 @@ export const configUpdateSchema = z.object({
 });
 
 export type ConfigUpdateInput = z.infer<typeof configUpdateSchema>;
+
+export const configSheetSchema = configSchema;

@@ -6,18 +6,18 @@ export const installmentPaymentSchema = z.object({
   concepto: z.string().min(1).max(200),
   importeTotal: z.number().positive(),
   importePagado: z.number().min(0),
-  fechaInicio: z.string().optional().default(""),
-  fechaFin: z.string().optional().default(""),
+  fechaInicio: z.string().optional(),
+  fechaFin: z.string().optional(),
   cuotaMensual: z.number().positive(),
-  categoria: z.string().max(100).optional().default(""),
-  cuentaOrigen: z.string().max(100).optional().default(""),
+  categoria: z.string().max(100).optional(),
+  cuentaOrigen: z.string().max(100).optional(),
   estado: z.enum([
     GenericStatus.ACTIVO,
     GenericStatus.PAUSADO,
     GenericStatus.COMPLETADO,
     GenericStatus.CANCELADO,
   ]),
-  notas: z.string().max(500).optional().default(""),
+  notas: z.string().max(500).optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -40,3 +40,7 @@ export const installmentPaymentUpdateSchema =
 export type InstallmentPaymentUpdateInput = z.infer<
   typeof installmentPaymentUpdateSchema
 >;
+
+export const installmentPaymentSheetSchema = installmentPaymentSchema.omit({
+  aplazadoId: true,
+});

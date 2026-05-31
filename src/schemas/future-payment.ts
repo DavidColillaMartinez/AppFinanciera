@@ -4,21 +4,21 @@ import { Frequency } from "@/constants/enums";
 export const futurePaymentSchema = z.object({
   pagoId: z.string().min(1),
   concepto: z.string().min(1).max(200),
-  categoria: z.string().max(100).optional().default(""),
+  categoria: z.string().max(100).optional(),
   importeObjetivo: z.number().positive(),
-  fechaVencimiento: z.string().optional().default(""),
+  fechaVencimiento: z.string().optional(),
   frecuencia: z.enum([
     Frequency.MENSUAL,
     Frequency.ANUAL,
     Frequency.TRIMESTRAL,
     Frequency.UNICO,
   ]),
-  cuentaReserva: z.string().max(100).optional().default(""),
+  cuentaReserva: z.string().max(100).optional(),
   activo: z.enum(["S", "N"]),
   saldoReservado: z.number().min(0),
   mesesRestantes: z.number().int().min(0).optional(),
   aporteMensual: z.number().positive().optional(),
-  notas: z.string().max(500).optional().default(""),
+  notas: z.string().max(500).optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -42,3 +42,7 @@ export const futurePaymentUpdateSchema = futurePaymentSchema.partial();
 export type FuturePaymentUpdateInput = z.infer<
   typeof futurePaymentUpdateSchema
 >;
+
+export const futurePaymentSheetSchema = futurePaymentSchema.omit({
+  pagoId: true,
+});
