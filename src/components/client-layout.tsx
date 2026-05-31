@@ -51,7 +51,7 @@ function GoogleReconnectPrompt() {
   );
 }
 
-const PUBLIC_ROUTES = ["/", "/onboarding", "/auth/google", "/auth/callback", "/_not-found"];
+const PUBLIC_ROUTES = ["/onboarding", "/auth/google", "/auth/callback", "/_not-found"];
 
 export function ClientLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();

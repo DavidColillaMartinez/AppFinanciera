@@ -1,0 +1,672 @@
+"use client";
+
+import { useState } from "react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+import { useAppStore } from "@/stores/app-store";
+import { useReserves, useDeleteReserve } from "@/features/reserves/hooks/use-reserves";
+import { useGoals, useDeleteGoal } from "@/features/goals/hooks/use-goals";
+import { useFuturePayments, useDeleteFuturePayment } from "@/features/future-payments/hooks/use-future-payments";
+import { useDeferredPayments, useDeleteDeferredPayment } from "@/features/deferred-payments/hooks/use-deferred-payments";
+import { useFixedExpenses, useDeleteFixedExpense } from "@/features/fixed-expenses/hooks/use-fixed-expenses";
+import { EmptyState } from "@/components/states/empty-state";
+import { LoadingState } from "@/components/states/loading-state";
+import { ErrorState } from "@/components/states/error-state";
+import { ReserveForm } from "@/features/reserves/components/reserve-form";
+import { GoalForm } from "@/features/goals/components/goal-form";
+import { FuturePaymentForm } from "@/features/future-payments/components/future-payment-form";
+import { DeferredPaymentForm } from "@/features/deferred-payments/components/deferred-payment-form";
+import { FixedExpenseForm } from "@/features/fixed-expenses/components/fixed-expense-form";
+import { ReserveMovements } from "@/features/reserve-movements/components/reserve-movements-list";
+import { Pencil, Trash2, Plus, History } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import type { ReserveRow } from "@/types/models";
+import type { GoalRow } from "@/types/models";
+import type { FuturePaymentRow } from "@/types/models";
+import type { InstallmentPaymentRow } from "@/types/models";
+import type { FixedExpenseRow } from "@/types/models";
+
+type Tab = "reservas" | "objetivos" | "futuros" | "aplazados" | "fijos";
+
+export default function SavingsPage() {
+  const { sheetId } = useAppStore();
+  const [activeTab, setActiveTab] = useState<Tab>("reservas");
+
+  const [showReserveForm, setShowReserveForm] = useState(false);
+  const [editingReserve, setEditingReserve] = useState<ReserveRow | null>(null);
+  const [showGoalForm, setShowGoalForm] = useState(false);
+  const [editingGoal, setEditingGoal] = useState<GoalRow | null>(null);
+  const [showFutureForm, setShowFutureForm] = useState(false);
+  const [editingFuture, setEditingFuture] = useState<FuturePaymentRow | null>(null);
+  const [showDeferredForm, setShowDeferredForm] = useState(false);
+  const [editingDeferred, setEditingDeferred] = useState<InstallmentPaymentRow | null>(null);
+  const [showFixedForm, setShowFixedForm] = useState(false);
+  const [editingFixed, setEditingFixed] = useState<FixedExpenseRow | null>(null);
+  const [viewingMovements, setViewingMovements] = useState<{ id: string; nombre: string } | null>(null);
+
+  const {
+    data: reserves,
+    isLoading: loadingReserves,
+    isError: errorReserves,
+    error: reservesError,
+  } = useReserves(sheetId);
+  const {
+    data: goals,
+    isLoading: loadingGoals,
+    isError: errorGoals,
+    error: goalsError,
+  } = useGoals(sheetId);
+  const {
+    data: futures,
+    isLoading: loadingFutures,
+    isError: errorFutures,
+    error: futuresError,
+  } = useFuturePayments(sheetId);
+  const {
+    data: deferred,
+    isLoading: loadingDeferred,
+    isError: errorDeferred,
+    error: deferredError,
+  } = useDeferredPayments(sheetId);
+  const {
+    data: fixed,
+    isLoading: loadingFixed,
+    isError: errorFixed,
+    error: fixedError,
+  } = useFixedExpenses(sheetId);
+
+  const deleteReserve = useDeleteReserve(sheetId);
+  const deleteGoal = useDeleteGoal(sheetId);
+  const deleteFuture = useDeleteFuturePayment(sheetId);
+  const deleteDeferred = useDeleteDeferredPayment(sheetId);
+  const deleteFixed = useDeleteFixedExpense(sheetId);
+
+  const tabs: { id: Tab; label: string }[] = [
+    { id: "reservas", label: "Reservas" },
+    { id: "objetivos", label: "Objetivos" },
+    { id: "futuros", label: "Futuros" },
+    { id: "aplazados", label: "Aplazados" },
+    { id: "fijos", label: "Fijos" },
+  ];
+
+  function handleAdd() {
+    switch (activeTab) {
+      case "reservas":
+        setEditingReserve(null);
+        setShowReserveForm(true);
+        break;
+      case "objetivos":
+        setEditingGoal(null);
+        setShowGoalForm(true);
+        break;
+      case "futuros":
+        setEditingFuture(null);
+        setShowFutureForm(true);
+        break;
+      case "aplazados":
+        setEditingDeferred(null);
+        setShowDeferredForm(true);
+        break;
+      case "fijos":
+        setEditingFixed(null);
+        setShowFixedForm(true);
+        break;
+    }
+  }
+
+  return (
+    <div className="px-4 py-6 space-y-4 pb-24">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Ahorros</h1>
+          <p className="text-sm text-muted-foreground">
+            Planificación financiera futura
+          </p>
+        </div>
+        <Button size="sm" className="gap-2" onClick={handleAdd}>
+          <Plus className="h-4 w-4" />
+          Nuevo
+        </Button>
+      </div>
+
+      <div className="flex gap-2 border-b overflow-x-auto">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
+              activeTab === tab.id
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === "reservas" && (
+        <>
+          {loadingReserves && <LoadingState message="Cargando reservas..." />}
+          {errorReserves && (
+            <ErrorState message={(reservesError as Error)?.message ?? "Error al cargar"} />
+          )}
+          {!loadingReserves && !errorReserves && (reserves ?? []).length === 0 && (
+            <EmptyState
+              title="Sin reservas"
+              description="Crea tu primera reserva de emergencia."
+              type="empty"
+            />
+          )}
+          {!loadingReserves && !errorReserves && reserves && reserves.length > 0 && (
+            <div className="space-y-2">
+              {reserves.map((reserve) => {
+                const progress =
+                  reserve.importeObjetivo > 0
+                    ? (reserve.saldoActual / reserve.importeObjetivo) * 100
+                    : 0;
+                return (
+                  <Card key={reserve.reservaId} className="overflow-hidden transition-all hover:shadow-md">
+                    <CardContent className="p-4">
+                      <div className="space-y-2">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <p className="font-medium text-sm">{reserve.nombre}</p>
+                            <p className="text-xs text-muted-foreground">{reserve.tipo}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline">{reserve.prioridad}</Badge>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() =>
+                                setViewingMovements({
+                                  id: reserve.reservaId,
+                                  nombre: reserve.nombre,
+                                })
+                              }
+                            >
+                              <History className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => {
+                                setEditingReserve(reserve);
+                                setShowReserveForm(true);
+                              }}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-destructive"
+                              onClick={() => {
+                                if (confirm("¿Eliminar esta reserva?")) {
+                                  deleteReserve.mutate(reserve.reservaId);
+                                }
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span>{reserve.saldoActual.toFixed(2)}</span>
+                          <span className="text-muted-foreground">
+                            / {reserve.importeObjetivo.toFixed(2)}
+                          </span>
+                        </div>
+                        <Progress value={progress} className="h-2" />
+                        <p className="text-xs text-muted-foreground">
+                          {progress.toFixed(1)}% · Aporte: {reserve.aporteMensualSugerido.toFixed(2)}/mes
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
+
+      {activeTab === "objetivos" && (
+        <>
+          {loadingGoals && <LoadingState message="Cargando objetivos..." />}
+          {errorGoals && (
+            <ErrorState message={(goalsError as Error)?.message ?? "Error al cargar"} />
+          )}
+          {!loadingGoals && !errorGoals && (goals ?? []).length === 0 && (
+            <EmptyState
+              title="Sin objetivos"
+              description="Crea tu primer objetivo de ahorro."
+              type="empty"
+            />
+          )}
+          {!loadingGoals && !errorGoals && goals && goals.length > 0 && (
+            <div className="space-y-2">
+              {goals.map((goal) => {
+                const progress =
+                  goal.importeObjetivo > 0
+                    ? (goal.saldoActual / goal.importeObjetivo) * 100
+                    : 0;
+                return (
+                  <Card key={goal.objetivoId} className="overflow-hidden transition-all hover:shadow-md">
+                    <CardContent className="p-4">
+                      <div className="space-y-2">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <p className="font-medium text-sm">{goal.nombre}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {goal.fechaObjetivo && `Fecha: ${goal.fechaObjetivo} · `}
+                              {goal.tipo}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline">{goal.estado}</Badge>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => {
+                                setEditingGoal(goal);
+                                setShowGoalForm(true);
+                              }}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-destructive"
+                              onClick={() => {
+                                if (confirm("¿Eliminar este objetivo?")) {
+                                  deleteGoal.mutate(goal.objetivoId);
+                                }
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span>{goal.saldoActual.toFixed(2)}</span>
+                          <span className="text-muted-foreground">
+                            / {goal.importeObjetivo.toFixed(2)}
+                          </span>
+                        </div>
+                        <Progress value={progress} className="h-2" />
+                        <p className="text-xs text-muted-foreground">
+                          {progress.toFixed(1)}% del objetivo
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
+
+      {activeTab === "futuros" && (
+        <>
+          {loadingFutures && <LoadingState message="Cargando pagos futuros..." />}
+          {errorFutures && (
+            <ErrorState message={(futuresError as Error)?.message ?? "Error al cargar"} />
+          )}
+          {!loadingFutures && !errorFutures && (futures ?? []).length === 0 && (
+            <EmptyState
+              title="Sin pagos futuros"
+              description="Planifica tus pagos futuros."
+              type="empty"
+            />
+          )}
+          {!loadingFutures && !errorFutures && futures && futures.length > 0 && (
+            <div className="space-y-2">
+              {futures.map((payment) => {
+                const progress =
+                  payment.importeObjetivo > 0
+                    ? (payment.saldoReservado / payment.importeObjetivo) * 100
+                    : 0;
+                return (
+                  <Card key={payment.pagoId} className="overflow-hidden transition-all hover:shadow-md">
+                    <CardContent className="p-4">
+                      <div className="space-y-2">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <p className="font-medium text-sm">{payment.concepto}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {payment.categoria}
+                              {payment.fechaVencimiento && ` · Vence: ${payment.fechaVencimiento}`}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => {
+                                setEditingFuture(payment);
+                                setShowFutureForm(true);
+                              }}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-destructive"
+                              onClick={() => {
+                                if (confirm("¿Eliminar este pago futuro?")) {
+                                  deleteFuture.mutate(payment.pagoId);
+                                }
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span>{payment.saldoReservado.toFixed(2)}</span>
+                          <span className="text-muted-foreground">
+                            / {payment.importeObjetivo.toFixed(2)}
+                          </span>
+                        </div>
+                        <Progress value={progress} className="h-2" />
+                        <p className="text-xs text-muted-foreground">
+                          {progress.toFixed(1)}% · Aporte: {payment.aporteMensual.toFixed(2)}/mes
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
+
+      {activeTab === "aplazados" && (
+        <>
+          {loadingDeferred && <LoadingState message="Cargando pagos aplazados..." />}
+          {errorDeferred && (
+            <ErrorState message={(deferredError as Error)?.message ?? "Error al cargar"} />
+          )}
+          {!loadingDeferred && !errorDeferred && (deferred ?? []).length === 0 && (
+            <EmptyState
+              title="Sin pagos aplazados"
+              description="Gestiona tus compras a plazos."
+              type="empty"
+            />
+          )}
+          {!loadingDeferred && !errorDeferred && deferred && deferred.length > 0 && (
+            <div className="space-y-2">
+              {deferred.map((payment) => {
+                const progress =
+                  payment.importeTotal > 0
+                    ? (payment.importePagado / payment.importeTotal) * 100
+                    : 0;
+                return (
+                  <Card key={payment.aplazadoId} className="overflow-hidden transition-all hover:shadow-md">
+                    <CardContent className="p-4">
+                      <div className="space-y-2">
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <p className="font-medium text-sm">{payment.concepto}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {payment.categoria}
+                              {payment.fechaFin && ` · Fin: ${payment.fechaFin}`}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline">{payment.estado}</Badge>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => {
+                                setEditingDeferred(payment);
+                                setShowDeferredForm(true);
+                              }}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-destructive"
+                              onClick={() => {
+                                if (confirm("¿Eliminar este pago aplazado?")) {
+                                  deleteDeferred.mutate(payment.aplazadoId);
+                                }
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span>{payment.importePagado.toFixed(2)} pagado</span>
+                          <span className="text-muted-foreground">
+                            / {payment.importeTotal.toFixed(2)}
+                          </span>
+                        </div>
+                        <Progress value={progress} className="h-2" />
+                        <p className="text-xs text-muted-foreground">
+                          {progress.toFixed(1)}% · Cuota: {payment.cuotaMensual.toFixed(2)}/mes
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
+
+      {activeTab === "fijos" && (
+        <>
+          {loadingFixed && <LoadingState message="Cargando gastos fijos..." />}
+          {errorFixed && (
+            <ErrorState message={(fixedError as Error)?.message ?? "Error al cargar"} />
+          )}
+          {!loadingFixed && !errorFixed && (fixed ?? []).length === 0 && (
+            <EmptyState
+              title="Sin gastos fijos"
+              description="Añade tus gastos recurrentes."
+              type="empty"
+            />
+          )}
+          {!loadingFixed && !errorFixed && fixed && fixed.length > 0 && (
+            <div className="space-y-2">
+              {fixed.map((expense) => (
+                <Card key={expense.fijoId} className="overflow-hidden transition-all hover:shadow-md">
+                  <CardContent className="p-4">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="font-medium text-sm">{expense.concepto}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {expense.categoria} · {expense.frecuencia}
+                          {expense.diaCargo && ` · Día ${expense.diaCargo}`}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <p className="text-lg font-bold text-expense">
+                          {expense.importe.toFixed(2)}
+                        </p>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => {
+                            setEditingFixed(expense);
+                            setShowFixedForm(true);
+                          }}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive"
+                          onClick={() => {
+                            if (confirm("¿Eliminar este gasto fijo?")) {
+                              deleteFixed.mutate(expense.fijoId);
+                            }
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      <Dialog open={showReserveForm} onOpenChange={setShowReserveForm}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {editingReserve ? "Editar reserva" : "Nueva reserva"}
+            </DialogTitle>
+          </DialogHeader>
+          <ReserveForm
+            sheetId={sheetId}
+            initialData={editingReserve ?? undefined}
+            onSuccess={() => {
+              setShowReserveForm(false);
+              setEditingReserve(null);
+            }}
+            onCancel={() => {
+              setShowReserveForm(false);
+              setEditingReserve(null);
+            }}
+          />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showGoalForm} onOpenChange={setShowGoalForm}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {editingGoal ? "Editar objetivo" : "Nuevo objetivo"}
+            </DialogTitle>
+          </DialogHeader>
+          <GoalForm
+            sheetId={sheetId}
+            initialData={editingGoal ?? undefined}
+            onSuccess={() => {
+              setShowGoalForm(false);
+              setEditingGoal(null);
+            }}
+            onCancel={() => {
+              setShowGoalForm(false);
+              setEditingGoal(null);
+            }}
+          />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showFutureForm} onOpenChange={setShowFutureForm}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {editingFuture ? "Editar pago futuro" : "Nuevo pago futuro"}
+            </DialogTitle>
+          </DialogHeader>
+          <FuturePaymentForm
+            sheetId={sheetId}
+            initialData={editingFuture ?? undefined}
+            onSuccess={() => {
+              setShowFutureForm(false);
+              setEditingFuture(null);
+            }}
+            onCancel={() => {
+              setShowFutureForm(false);
+              setEditingFuture(null);
+            }}
+          />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showDeferredForm} onOpenChange={setShowDeferredForm}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {editingDeferred ? "Editar pago aplazado" : "Nuevo pago aplazado"}
+            </DialogTitle>
+          </DialogHeader>
+          <DeferredPaymentForm
+            sheetId={sheetId}
+            initialData={editingDeferred ?? undefined}
+            onSuccess={() => {
+              setShowDeferredForm(false);
+              setEditingDeferred(null);
+            }}
+            onCancel={() => {
+              setShowDeferredForm(false);
+              setEditingDeferred(null);
+            }}
+          />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showFixedForm} onOpenChange={setShowFixedForm}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {editingFixed ? "Editar gasto fijo" : "Nuevo gasto fijo"}
+            </DialogTitle>
+          </DialogHeader>
+          <FixedExpenseForm
+            sheetId={sheetId}
+            initialData={editingFixed ?? undefined}
+            onSuccess={() => {
+              setShowFixedForm(false);
+              setEditingFixed(null);
+            }}
+            onCancel={() => {
+              setShowFixedForm(false);
+              setEditingFixed(null);
+            }}
+          />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!viewingMovements}
+        onOpenChange={(open) => !open && setViewingMovements(null)}
+      >
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Movimientos de reserva</DialogTitle>
+          </DialogHeader>
+          {viewingMovements && (
+            <ReserveMovements
+              reservaId={viewingMovements.id}
+              reservaNombre={viewingMovements.nombre}
+              onClose={() => setViewingMovements(null)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
