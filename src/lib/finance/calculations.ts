@@ -1,5 +1,35 @@
 import { TransactionType } from "@/constants/enums";
 
+export interface CategoryExpense {
+  category: string;
+  categoryName?: string;
+  total: number;
+}
+
+export function calculateExpensesByCategory(
+  transactions: { tipo: string; importe: number; categoria: string }[],
+  categories: { categoriaId: string; nombre: string }[],
+): CategoryExpense[] {
+  const categoryMap = new Map(categories.map((c) => [c.categoriaId, c.nombre]));
+
+  const grouped = transactions.reduce(
+    (acc, t) => {
+      const key = t.categoria || "Sin categoria";
+      acc[key] = (acc[key] ?? 0) + t.importe;
+      return acc;
+    },
+    {} as Record<string, number>,
+  );
+
+  return Object.entries(grouped)
+    .map(([catId, total]) => ({
+      category: catId,
+      categoryName: categoryMap.get(catId) ?? catId,
+      total,
+    }))
+    .sort((a, b) => b.total - a.total);
+}
+
 export function calculateMonthlyIncome(
   transactions: { tipo: string; importe: number }[],
 ): number {
