@@ -3,13 +3,13 @@
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, CreditCard, PiggyBank, Settings, Layers } from "lucide-react";
+import { Home, ArrowLeftRight, Wallet, Target, Settings } from "lucide-react";
 
 const navItems: { href: `/${string}`; label: string; icon: typeof Home }[] = [
   { href: "/", label: "Inicio", icon: Home },
-  { href: "/transactions", label: "Movimientos", icon: Layers },
-  { href: "/accounts", label: "Cuentas", icon: CreditCard },
-  { href: "/goals", label: "Objetivos", icon: PiggyBank },
+  { href: "/transactions", label: "Movimientos", icon: ArrowLeftRight },
+  { href: "/accounts", label: "Cuentas", icon: Wallet },
+  { href: "/goals", label: "Reservas", icon: Target },
   { href: "/settings", label: "Ajustes", icon: Settings },
 ];
 
@@ -18,10 +18,10 @@ export function BottomNav() {
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-50 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60"
+      className="fixed bottom-0 left-0 right-0 z-50 border-t border-border/60 bg-background/95 backdrop-blur-xl supports-[backdrop-filter]:bg-background/80"
       aria-label="Navegacion principal"
     >
-      <div className="mx-auto flex h-16 max-w-md items-center justify-around px-4">
+      <div className="mx-auto flex h-16 max-w-md items-center justify-around px-2">
         {navItems.map((item) => {
           const isActive =
             pathname === item.href ||
@@ -31,15 +31,39 @@ export function BottomNav() {
               key={item.href}
               href={item.href}
               className={cn(
-                "flex flex-col items-center justify-center gap-1 rounded-lg px-3 py-2 text-xs transition-colors",
+                "relative flex flex-col items-center justify-center gap-0.5 rounded-xl px-3 py-2 text-xs transition-all duration-200",
                 isActive
-                  ? "text-primary font-semibold"
+                  ? "text-primary"
                   : "text-muted-foreground hover:text-foreground",
               )}
               aria-current={isActive ? "page" : undefined}
             >
-              <item.icon className="h-5 w-5" aria-hidden="true" />
-              <span>{item.label}</span>
+              {isActive && (
+                <span className="absolute inset-x-2 -top-3 h-6 rounded-full bg-primary/10" />
+              )}
+              <span
+                className={cn(
+                  "relative z-10 transition-transform duration-200",
+                  isActive && "scale-110",
+                )}
+              >
+                <item.icon
+                  className={cn(
+                    "h-5 w-5 transition-colors duration-200",
+                    isActive ? "text-primary" : "text-muted-foreground",
+                  )}
+                  aria-hidden="true"
+                  strokeWidth={isActive ? 2.5 : 2}
+                />
+              </span>
+              <span
+                className={cn(
+                  "relative z-10 font-medium transition-colors duration-200",
+                  isActive && "text-primary",
+                )}
+              >
+                {item.label}
+              </span>
             </Link>
           );
         })}
