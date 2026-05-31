@@ -14,7 +14,7 @@ if (typeof window !== "undefined") {
 }
 
 export const GOOGLE_SCOPES = [
-  "https://www.googleapis.com/auth/spreadsheets.readwrite",
+  "https://www.googleapis.com/auth/spreadsheets",
   "https://www.googleapis.com/auth/userinfo.email",
   "https://www.googleapis.com/auth/userinfo.profile",
 ].join(" ");
