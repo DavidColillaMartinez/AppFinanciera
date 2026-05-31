@@ -43,17 +43,14 @@ export async function batchUpdateSheet(
   accessToken: string,
 ): Promise<void> {
   const response = await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}`,
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=RAW`,
     {
       method: "PUT",
       headers: {
         Authorization: `Bearer ${accessToken}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        values: [values],
-        inputOption: "RAW",
-      }),
+      body: JSON.stringify({ values }),
     },
   );
 
@@ -73,21 +70,17 @@ export async function appendRowToSheet(
   values: (string | number | boolean)[],
   accessToken: string,
 ): Promise<void> {
-  const range = `${sheetName}!A:${String.fromCharCode(65 + values.length - 1)}`;
+  const range = `${sheetName}!A:A`;
 
   const response = await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}:append`,
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`,
     {
       method: "POST",
       headers: {
         Authorization: `Bearer ${accessToken}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        values: [values],
-        insertDataOption: "INSERT_ROWS",
-        inputOption: "RAW",
-      }),
+      body: JSON.stringify({ values: [values] }),
     },
   );
 
@@ -111,17 +104,14 @@ export async function updateCell(
   const range = `${sheetName}!${cell}`;
 
   const response = await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}`,
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=RAW`,
     {
       method: "PUT",
       headers: {
         Authorization: `Bearer ${accessToken}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        values: [[value]],
-        inputOption: "RAW",
-      }),
+      body: JSON.stringify({ values: [[value]] }),
     },
   );
 

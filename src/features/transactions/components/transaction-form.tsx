@@ -6,7 +6,6 @@ import {
   transactionCreateSchema,
   transactionUpdateSchema,
   type TransactionCreateInput,
-  type TransactionUpdateInput,
 } from "@/schemas/transaction";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -86,7 +85,7 @@ export function TransactionForm({
     reset,
     setValue,
     formState: { errors },
-  } = useForm<TransactionCreateInput>({
+  } = useForm({
     resolver: zodResolver(
       isEditing ? transactionUpdateSchema : transactionCreateSchema,
     ),
@@ -108,7 +107,7 @@ export function TransactionForm({
     })),
   ];
 
-  async function onSubmit(data: TransactionCreateInput) {
+  async function onSubmit(data: Record<string, unknown>) {
     setIsSubmitting(true);
     try {
       if (isEditing && initialData) {
@@ -119,7 +118,7 @@ export function TransactionForm({
         } as Parameters<typeof updateTransaction.mutateAsync>[0]);
       } else {
         await createTransaction.mutateAsync(
-          data as Parameters<typeof createTransaction.mutateAsync>[0],
+          data as unknown as Parameters<typeof createTransaction.mutateAsync>[0],
         );
       }
       reset(defaultValues);

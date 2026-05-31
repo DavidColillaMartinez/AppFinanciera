@@ -36,11 +36,17 @@ export const transactionCreateSchema = transactionSchema.omit({
 
 export type TransactionCreateInput = z.infer<typeof transactionCreateSchema>;
 
-export const transactionUpdateSchema = transactionSchema.omit({
-  id: true,
-  createdAt: true,
-  deletedAt: true,
-});
+export const transactionUpdateSchema = transactionSchema
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+    deletedAt: true,
+    mesClave: true,
+  })
+  .extend({
+    categoria: z.string().max(100).optional(),
+  });
 
 export type TransactionUpdateInput = z.infer<typeof transactionUpdateSchema>;
 

@@ -4,8 +4,6 @@ import {
   appendRowToSheet,
   updateCell,
   getToken,
-  type SheetBatchGetResult,
-  SheetsApiError,
 } from "./client";
 
 export async function getSheetHeaders(
@@ -41,7 +39,7 @@ export async function findRowIndexByColumnValue(
 
   for (let i = 1; i < result.values.length; i++) {
     if (String(result.values[i][0] ?? "") === value) {
-      return i + 2;
+      return i + 1;
     }
   }
   return null;
@@ -72,18 +70,26 @@ export async function updateRowByColumn(
   accessToken: string,
 ): Promise<void> {
   const headers = await getSheetHeaders(spreadsheetId, sheetName, accessToken);
-  const range = `${sheetName}!A${rowIndex}:${String.fromCharCode(65 + headers.length - 1)}${rowIndex}`;
 
-  const values: (string | number | boolean)[] = headers.map((h) => {
+  const existingRowRange = `${sheetName}!A${rowIndex}:${String.fromCharCode(65 + headers.length - 1)}${rowIndex}`;
+  const existingResult = await batchGetSheet(
+    spreadsheetId,
+    existingRowRange,
+    accessToken,
+  );
+  const existingValues = existingResult.values[0] ?? [];
+
+  const values: (string | number | boolean)[] = headers.map((h, colIndex) => {
     if (h in updates) {
       const val = updates[h];
       if (val === undefined || val === null) return "";
       if (typeof val === "boolean") return val ? "TRUE" : "FALSE";
       return String(val);
     }
-    return "";
+    return existingValues[colIndex] ?? "";
   });
 
+  const range = `${sheetName}!A${rowIndex}:${String.fromCharCode(65 + headers.length - 1)}${rowIndex}`;
   await batchUpdateSheet(spreadsheetId, range, [values], accessToken);
 }
 
@@ -102,4 +108,4 @@ export async function softDeleteRow(
   );
 }
 
-export { getToken, SheetsApiError };
+export { getToken };

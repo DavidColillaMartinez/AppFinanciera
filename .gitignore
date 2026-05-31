@@ -10,3 +10,10 @@ dist/
 .agents/
 skills-lock.json
 tsconfig.tsbuildinfo
+.vercel/
+OpencodeKey.txt
+*.key
+*.token
+*.secret
+credentials.json
+service-account*.json

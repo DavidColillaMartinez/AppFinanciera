@@ -3,6 +3,7 @@
 import { ThemeProvider } from "@/components/theme-provider";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
+import { useRouter, usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/stores/app-store";
 import { hasToken } from "@/lib/sheets/client";
@@ -50,7 +51,11 @@ function GoogleReconnectPrompt() {
   );
 }
 
+const PUBLIC_ROUTES = ["/", "/onboarding", "/auth/google", "/auth/callback", "/_not-found"];
+
 export function ClientLayout({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
+  const pathname = usePathname();
   const [queryClient] = useState(
     () =>
       new QueryClient({
@@ -72,13 +77,26 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     setHasGoogleToken(hasToken());
   }, []);
 
+  useEffect(() => {
+    if (!mounted) return;
+    const isPublicRoute = PUBLIC_ROUTES.some((route) =>
+      pathname === route || pathname.startsWith(route + "/")
+    );
+    if (isPublicRoute) return;
+
+    if (!hasSeenOnboarding || !isConnected) {
+      router.replace("/onboarding");
+    } else if (isConnected && !hasGoogleToken) {
+    }
+  }, [mounted, hasSeenOnboarding, isConnected, hasGoogleToken, pathname, router]);
+
   if (!mounted) {
     return null;
   }
 
   const showReconnectPrompt =
-    hasSeenOnboarding && !hasGoogleToken && isConnected;
-  const showNoConnection = !isConnected && hasGoogleToken;
+    mounted && hasSeenOnboarding && !hasGoogleToken && isConnected;
+  const showNoConnection = mounted && !isConnected;
 
   return (
     <QueryClientProvider client={queryClient}>
