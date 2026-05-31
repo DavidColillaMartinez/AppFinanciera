@@ -1,23 +1,61 @@
 # Revision De Plantilla Base
 
-## Resultado
+## Resumen
 
-La plantilla es una buena base para convertir el sistema actual en una app. Ya contiene las areas principales: movimientos, categorias, cuentas, gastos fijos, pagos futuros, objetivos, reservas, movimientos de reservas y pagos aplazados.
+La plantilla original `plantilla_base_finanzas_app.xlsx` ha sido auditada completamente.
+El resultado es un contrato oficial de datos documentado en `docs/sheet-contract.md`.
 
-## Apto Para Empezar Proyecto
+## Hojas Oficiales Confirmadas
 
-Si. La estructura permite iniciar el proyecto de app y documentar el contrato.
+- `Config` - Configuracion global
+- `Movimientos` - Transacciones
+- `Categorias` - Categorias
+- `Cuentas` - Cuentas
+- `Gastos_fijos` - Gastos fijos
+- `Pagos_futuros` - Pagos futuros
+- `Objetivos` - Objetivos
+- `Reservas` - Reservas
+- `Mov_reservas` - Movimientos de reservas
+- `Pagos_aplazados` - Pagos aplazados
 
-## No Apto Como Contrato Final Sin Cambios
+## Hojas Ignoradas
 
-Antes de v1.0.0 se recomienda crear una version limpia de plantilla oficial:
+- `00_LEEME` - Instrucciones legacy
+- `Dashboard` - Panel visual, no tabla de datos
+- `Vista_mes` - Vista rapida, no tabla de datos
+- `AppsScript` - Codigo legacy, fuera de la arquitectura oficial
 
-- Sin Apps Script como pieza oficial.
-- Sin instrucciones que sugieran depender de Apps Script.
-- Con columnas requeridas completas.
-- Con formulas eliminadas de tablas base o tratadas como legado visual.
-- Con `Config` ampliado para versionado, locale y compatibilidad.
+## Cambios Requeridos Para Contrato v1.0.0
 
-## Decision Inicial
+### Eliminar formulas de tablas base
 
-La app se construira contra tablas estables. Las hojas visuales `Dashboard` y `Vista_mes` se consideran auxiliares/legado y no deben ser dependencia funcional de la app.
+Las siguientes columnas contienen formulas en la plantilla original y deben limpiarse:
+
+- `Pagos_futuros`: `mesesRestantes` (columna J), `aporteMensual` (columna K)
+- `Objetivos`: `mesesRestantes` (columna I), `aporteMensual` (columna J)
+
+Estas columnas deben existir como encabezados pero estar vacias en las filas de datos.
+La app calculara estos valores internamente.
+
+### Anadir deletedAt
+
+La plantilla original no tiene columna `deletedAt` en ninguna tabla.
+La app implementara soft delete filtrando celdas vacias.
+Para compatibilidad, ninguna tabla necesita columna adicional si la app interpreta vacio como activo.
+
+### Marcar AppsScript como no oficial
+
+La hoja `AppsScript` contiene codigo que dependia de Apps Script para guardar movimientos.
+Esto contradice la arquitectura oficial de la app.
+
+Para la plantilla oficial que se distribuira a usuarios:
+
+- Eliminar la hoja `AppsScript`.
+- Eliminar o reescribir las instrucciones en `00_LEEME` que sugieren copiar Apps Script.
+
+## Valoracion
+
+La estructura base es buena. Las hojas principales cubren todos los modelos de datos necesarios.
+El contrato es viable y permite iniciar la implementacion de la app.
+
+Las discrepancias encontradas son solventables sin necesidad de restructuring, solo limpiando formulas legacies y marcando hojas como no soportadas.
