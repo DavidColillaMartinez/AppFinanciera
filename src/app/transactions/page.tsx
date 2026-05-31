@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,7 +10,6 @@ import { TransactionForm } from "@/features/transactions/components/transaction-
 import {
   useTransactions,
   useDeleteTransaction,
-  useUpdateTransaction,
 } from "@/features/transactions/hooks/use-transactions";
 import { useCategories } from "@/features/categories/hooks/use-categories";
 import { useAccounts } from "@/features/accounts/hooks/use-accounts";
@@ -18,26 +17,39 @@ import { useAppStore } from "@/stores/app-store";
 import { EmptyState } from "@/components/states/empty-state";
 import { LoadingState } from "@/components/states/loading-state";
 import { ErrorState } from "@/components/states/error-state";
-import { PlusIcon, PencilIcon, TrashIcon, XIcon } from "lucide-react";
 import {
-  calculateMonthlyBalance,
-  calculateMonthlyIncome,
-  calculateMonthlyExpenses,
-} from "@/lib/finance/calculations";
+  Plus,
+  Pencil,
+  Trash2,
+  ArrowDownLeft,
+  ArrowUpRight,
+  PiggyBank,
+  ArrowRightLeft,
+  Search,
+  X,
+} from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { TransactionType } from "@/constants/enums";
+import { cn } from "@/lib/utils";
 
 const typeOptions = [
   { value: "", label: "Todos" },
-  { value: TransactionType.INGRESO, label: "Ingreso" },
-  { value: TransactionType.GASTO, label: "Gasto" },
-  { value: TransactionType.AHORRO, label: "Ahorro" },
-  { value: TransactionType.TRANSFERENCIA_INTERNA, label: "Transferencia" },
+  { value: TransactionType.INGRESO, label: "Ingresos" },
+  { value: TransactionType.GASTO, label: "Gastos" },
+  { value: TransactionType.AHORRO, label: "Ahorros" },
+  { value: TransactionType.TRANSFERENCIA_INTERNA, label: "Transferencias" },
 ];
 
 export default function TransactionsPage() {
   const { sheetId } = useAppStore();
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [selectedType, setSelectedType] = useState<TransactionType | null>(null);
   const [selectedMonth, setSelectedMonth] = useState<string>(
     new Date().toISOString().slice(0, 7),
   );
@@ -55,7 +67,6 @@ export default function TransactionsPage() {
   const { data: categories } = useCategories(sheetId);
   const { data: accounts } = useAccounts(sheetId);
   const deleteTransaction = useDeleteTransaction(sheetId);
-  const updateTransaction = useUpdateTransaction(sheetId);
 
   const categoryOptions = [
     { value: "", label: "Todas" },
@@ -67,45 +78,65 @@ export default function TransactionsPage() {
     ...(accounts ?? []).map((a) => ({ value: a.nombre, label: a.nombre })),
   ];
 
-  let filtered = transactions ?? [];
+  const filtered = useMemo(() => {
+    let result = transactions ?? [];
 
-  if (filterType) {
-    filtered = filtered.filter((t) => t.tipo === filterType);
-  }
-  if (filterCategory) {
-    filtered = filtered.filter((t) => t.categoria === filterCategory);
-  }
-  if (filterAccount) {
-    filtered = filtered.filter(
-      (t) =>
-        t.cuentaOrigen === filterAccount || t.cuentaDestino === filterAccount,
-    );
-  }
-  if (search) {
-    const q = search.toLowerCase();
-    filtered = filtered.filter(
-      (t) =>
-        t.concepto.toLowerCase().includes(q) ||
-        t.notas.toLowerCase().includes(q),
-    );
-  }
+    if (filterType) {
+      result = result.filter((t) => t.tipo === filterType);
+    }
+    if (filterCategory) {
+      result = result.filter((t) => t.categoria === filterCategory);
+    }
+    if (filterAccount) {
+      result = result.filter(
+        (t) =>
+          t.cuentaOrigen === filterAccount || t.cuentaDestino === filterAccount,
+      );
+    }
+    if (search) {
+      const q = search.toLowerCase();
+      result = result.filter(
+        (t) =>
+          t.concepto.toLowerCase().includes(q) ||
+          t.notas.toLowerCase().includes(q),
+      );
+    }
 
-  const balance = calculateMonthlyBalance(
-    filtered.map((t) => ({ tipo: t.tipo, importe: t.importe })),
+    return result;
+  }, [transactions, filterType, filterCategory, filterAccount, search]);
+
+  const income = useMemo(
+    () =>
+      filtered
+        .filter((t) => t.tipo === "Ingreso")
+        .reduce((acc, t) => acc + t.importe, 0),
+    [filtered],
   );
-  const income = calculateMonthlyIncome(
-    filtered.map((t) => ({ tipo: t.tipo, importe: t.importe })),
+
+  const expenses = useMemo(
+    () =>
+      filtered
+        .filter((t) => t.tipo === "Gasto")
+        .reduce((acc, t) => acc + t.importe, 0),
+    [filtered],
   );
-  const expenses = calculateMonthlyExpenses(
-    filtered.map((t) => ({ tipo: t.tipo, importe: t.importe })),
+
+  const savings = useMemo(
+    () =>
+      filtered
+        .filter((t) => t.tipo === "Ahorro")
+        .reduce((acc, t) => acc + t.importe, 0),
+    [filtered],
   );
+
+  const balance = income - expenses - savings;
 
   const editingTransaction = editingId
     ? filtered.find((t) => t.id === editingId)
     : null;
 
   async function handleDelete(id: string) {
-    if (!confirm("Borrar este movimiento?")) return;
+    if (!confirm("¿Borrar este movimiento?")) return;
     try {
       await deleteTransaction.mutateAsync(id);
     } catch (e) {
@@ -113,30 +144,58 @@ export default function TransactionsPage() {
     }
   }
 
-  async function handleEditSave(
-    data: Parameters<typeof updateTransaction.mutateAsync>[0],
-  ) {
-    try {
-      await updateTransaction.mutateAsync(data);
-      setEditingId(null);
-    } catch (e) {
-      console.error("Error updating:", e);
-    }
+  function handleAddType(type: TransactionType) {
+    setSelectedType(type);
+    setEditingId(null);
+    setShowForm(true);
   }
 
   return (
-    <div className="px-4 py-6 space-y-4">
+    <div className="px-4 py-6 space-y-4 pb-24">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold tracking-tight">Movimientos</h1>
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Movimientos</h1>
+          <p className="text-sm text-muted-foreground">
+            Gestión completa de transacciones
+          </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-4 gap-2">
         <Button
           size="sm"
-          onClick={() => {
-            setEditingId(null);
-            setShowForm(!showForm);
-          }}
+          variant="income"
+          className="gap-1"
+          onClick={() => handleAddType(TransactionType.INGRESO)}
         >
-          <PlusIcon className="h-4 w-4 mr-1" />
-          Nuevo
+          <ArrowDownLeft className="h-4 w-4" />
+          Ingreso
+        </Button>
+        <Button
+          size="sm"
+          variant="expense"
+          className="gap-1"
+          onClick={() => handleAddType(TransactionType.GASTO)}
+        >
+          <ArrowUpRight className="h-4 w-4" />
+          Gasto
+        </Button>
+        <Button
+          size="sm"
+          className="gap-1 bg-savings hover:bg-savings/90"
+          onClick={() => handleAddType(TransactionType.AHORRO)}
+        >
+          <PiggyBank className="h-4 w-4" />
+          Ahorro
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          className="gap-1"
+          onClick={() => handleAddType(TransactionType.TRANSFERENCIA_INTERNA)}
+        >
+          <ArrowRightLeft className="h-4 w-4" />
+          Transf.
         </Button>
       </div>
 
@@ -145,83 +204,87 @@ export default function TransactionsPage() {
           type="month"
           value={selectedMonth}
           onChange={(e) => setSelectedMonth(e.target.value)}
-          className="rounded-lg border border-input bg-background px-3 py-2 text-sm flex-1"
+          className="rounded-xl border border-input bg-card px-3 py-2 text-sm shadow-sm transition-colors hover:border-primary/50 focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/20 flex-1"
         />
-        <Input
-          placeholder="Buscar..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="flex-1"
-        />
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+          />
+          {search && (
+            <button
+              onClick={() => setSearch("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2"
+            >
+              <X className="h-4 w-4 text-muted-foreground" />
+            </button>
+          )}
+        </div>
       </div>
 
-      <div className="flex gap-2">
+      <div className="grid grid-cols-3 gap-2">
         <Select
           options={typeOptions}
           value={filterType}
           onChange={(e) => setFilterType(e.target.value)}
-          className="flex-1"
         />
         <Select
           options={categoryOptions}
           value={filterCategory}
           onChange={(e) => setFilterCategory(e.target.value)}
-          className="flex-1"
+        />
+        <Select
+          options={accountOptions}
+          value={filterAccount}
+          onChange={(e) => setFilterAccount(e.target.value)}
         />
       </div>
 
-      <div className="grid grid-cols-3 gap-3">
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground">Ingresos</p>
-            <p className="text-lg font-semibold text-green-600">
-              {income.toFixed(2)}
+      <div className="grid grid-cols-4 gap-2">
+        <Card className="card-income">
+          <CardContent className="p-3">
+            <p className="text-xs text-muted-foreground uppercase tracking-wide">
+              Ingresos
             </p>
+            <p className="text-lg font-bold text-income">+{income.toFixed(2)}</p>
+          </CardContent>
+        </Card>
+        <Card className="card-expense">
+          <CardContent className="p-3">
+            <p className="text-xs text-muted-foreground uppercase tracking-wide">
+              Gastos
+            </p>
+            <p className="text-lg font-bold text-expense">-{expenses.toFixed(2)}</p>
+          </CardContent>
+        </Card>
+        <Card className="card-savings">
+          <CardContent className="p-3">
+            <p className="text-xs text-muted-foreground uppercase tracking-wide">
+              Ahorro
+            </p>
+            <p className="text-lg font-bold text-savings">+{savings.toFixed(2)}</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground">Gastos</p>
-            <p className="text-lg font-semibold text-red-600">
-              {expenses.toFixed(2)}
+          <CardContent className="p-3">
+            <p className="text-xs text-muted-foreground uppercase tracking-wide">
+              Balance
             </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground">Balance</p>
             <p
-              className={`text-lg font-semibold ${balance >= 0 ? "text-green-600" : "text-red-600"}`}
+              className={cn(
+                "text-lg font-bold",
+                balance >= 0 ? "text-income" : "text-expense",
+              )}
             >
+              {balance >= 0 ? "+" : ""}
               {balance.toFixed(2)}
             </p>
           </CardContent>
         </Card>
       </div>
-
-      {showForm && !editingId && (
-        <TransactionForm
-          sheetId={sheetId}
-          categories={categories ?? []}
-          accounts={accounts ?? []}
-          onSuccess={() => setShowForm(false)}
-          onCancel={() => setShowForm(false)}
-        />
-      )}
-
-      {editingId && editingTransaction && (
-        <TransactionForm
-          sheetId={sheetId}
-          categories={categories ?? []}
-          accounts={accounts ?? []}
-          initialData={editingTransaction}
-          onSuccess={() => {
-            setEditingId(null);
-            setShowForm(false);
-          }}
-          onCancel={() => setEditingId(null)}
-        />
-      )}
 
       {isLoading && <LoadingState message="Cargando movimientos..." />}
 
@@ -240,31 +303,62 @@ export default function TransactionsPage() {
       {!isLoading && !isError && filtered.length > 0 && (
         <div className="space-y-2">
           {filtered.map((t) => (
-            <Card key={t.id}>
+            <Card key={t.id} className="overflow-hidden transition-all hover:shadow-md">
               <CardContent className="p-4">
                 <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-medium text-sm truncate">
-                        {t.concepto}
-                      </span>
-                      <Badge
-                        variant={
-                          t.tipo === "Ingreso"
-                            ? "success"
-                            : t.tipo === "Gasto"
-                              ? "destructive"
-                              : "outline"
-                        }
-                      >
-                        {t.tipo}
-                      </Badge>
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div
+                      className={cn(
+                        "rounded-lg p-2",
+                        t.tipo === "Ingreso"
+                          ? "bg-income/10"
+                          : t.tipo === "Gasto"
+                            ? "bg-expense/10"
+                            : t.tipo === "Ahorro"
+                              ? "bg-savings/10"
+                              : "bg-muted",
+                      )}
+                    >
+                      {t.tipo === "Ingreso" ? (
+                        <ArrowDownLeft className="h-4 w-4 text-income" />
+                      ) : t.tipo === "Gasto" ? (
+                        <ArrowUpRight className="h-4 w-4 text-expense" />
+                      ) : t.tipo === "Ahorro" ? (
+                        <PiggyBank className="h-4 w-4 text-savings" />
+                      ) : (
+                        <ArrowRightLeft className="h-4 w-4 text-muted-foreground" />
+                      )}
                     </div>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {t.fecha}
-                      {t.categoria && ` · ${t.categoria}`}
-                      {t.cuentaOrigen && ` · ${t.cuentaOrigen}`}
-                    </p>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-medium text-sm truncate">
+                          {t.concepto}
+                        </span>
+                        <Badge
+                          variant={
+                            t.tipo === "Ingreso"
+                              ? "success"
+                              : t.tipo === "Gasto"
+                                ? "destructive"
+                                : t.tipo === "Ahorro"
+                                  ? "outline"
+                                  : "outline"
+                          }
+                          className={cn(
+                            "text-xs",
+                            t.tipo === "Ahorro" && "text-savings border-savings/30",
+                            t.tipo === "Transferencia interna" && "text-muted-foreground",
+                          )}
+                        >
+                          {t.tipo}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {t.fecha}
+                        {t.categoria && ` · ${t.categoria}`}
+                        {t.cuentaOrigen && ` · ${t.cuentaOrigen}`}
+                      </p>
+                    </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <button
@@ -274,22 +368,27 @@ export default function TransactionsPage() {
                       }}
                       className="p-1.5 rounded-md hover:bg-muted transition-colors"
                     >
-                      <PencilIcon className="h-4 w-4 text-muted-foreground" />
+                      <Pencil className="h-4 w-4 text-muted-foreground" />
                     </button>
                     <button
                       onClick={() => handleDelete(t.id)}
                       className="p-1.5 rounded-md hover:bg-muted transition-colors"
                     >
-                      <TrashIcon className="h-4 w-4 text-destructive" />
+                      <Trash2 className="h-4 w-4 text-destructive" />
                     </button>
                     <p
-                      className={`font-semibold ${
+                      className={cn(
+                        "font-semibold text-sm min-w-[80px] text-right",
                         t.tipo === "Ingreso"
-                          ? "text-green-600"
-                          : "text-foreground"
-                      }`}
+                          ? "text-income"
+                          : t.tipo === "Gasto"
+                            ? "text-expense"
+                            : t.tipo === "Ahorro"
+                              ? "text-savings"
+                              : "text-muted-foreground",
+                      )}
                     >
-                      {t.tipo === "Ingreso" ? "+" : "-"}
+                      {t.tipo === "Ingreso" ? "+" : t.tipo === "Gasto" || t.tipo === "Ahorro" ? "-" : ""}
                       {Number(t.importe).toFixed(2)}
                     </p>
                   </div>
@@ -299,6 +398,61 @@ export default function TransactionsPage() {
           ))}
         </div>
       )}
+
+      <Dialog open={showForm} onOpenChange={setShowForm}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {editingTransaction
+                ? "Editar movimiento"
+                : selectedType === TransactionType.INGRESO
+                  ? "Nuevo ingreso"
+                  : selectedType === TransactionType.GASTO
+                    ? "Nuevo gasto"
+                    : selectedType === TransactionType.AHORRO
+                      ? "Nuevo ahorro"
+                      : "Nueva transferencia"}
+            </DialogTitle>
+          </DialogHeader>
+          <TransactionForm
+            sheetId={sheetId}
+            categories={categories ?? []}
+            accounts={accounts ?? []}
+            initialData={
+              editingTransaction ??
+              (selectedType
+                ? {
+                    id: "",
+                    fecha: new Date().toISOString().split("T")[0],
+                    mesClave: selectedMonth,
+                    concepto: "",
+                    tipo: selectedType,
+                    categoria: "",
+                    importe: 0,
+                    metodo: "",
+                    cuentaOrigen: "",
+                    cuentaDestino: "",
+                    notas: "",
+                    reservaId: "",
+                    createdAt: "",
+                    updatedAt: "",
+                    deletedAt: "",
+                  }
+                : undefined)
+            }
+            onSuccess={() => {
+              setShowForm(false);
+              setEditingId(null);
+              setSelectedType(null);
+            }}
+            onCancel={() => {
+              setShowForm(false);
+              setEditingId(null);
+              setSelectedType(null);
+            }}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
