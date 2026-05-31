@@ -92,9 +92,16 @@ function OnboardingContent() {
         return;
       }
 
+      const ESSENTIAL_SHEETS = [
+        SHEET_NAMES.CONFIG,
+        SHEET_NAMES.MOVIMIENTOS,
+        SHEET_NAMES.CATEGORIAS,
+        SHEET_NAMES.CUENTAS,
+      ];
+
       const { valid, errors, warnings } = await validateSheetCompatibility(
         parsed,
-        Object.values(SHEET_NAMES),
+        ESSENTIAL_SHEETS,
       );
 
       if (!valid) {
@@ -126,6 +133,24 @@ function OnboardingContent() {
 
       if (warnings.length > 0) {
         console.warn("Sheet compatibility warnings:", warnings);
+      }
+
+      const ADVANCED_SHEETS = [
+        SHEET_NAMES.GASTOS_FIJOS,
+        SHEET_NAMES.PAGOS_FUTUROS,
+        SHEET_NAMES.PAGOS_APLAZADOS,
+        SHEET_NAMES.RESERVAS,
+        SHEET_NAMES.OBJETIVOS,
+        SHEET_NAMES.MOV_RESERVAS,
+      ];
+
+      const advancedValidation = await validateSheetCompatibility(
+        parsed,
+        ADVANCED_SHEETS,
+      );
+
+      if (advancedValidation.warnings.length > 0 || !advancedValidation.valid) {
+        console.warn("Advanced features not fully available:", advancedValidation);
       }
 
       setSheetConnection(
