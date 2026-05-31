@@ -418,28 +418,8 @@ export default function TransactionsPage() {
             sheetId={sheetId}
             categories={categories ?? []}
             accounts={accounts ?? []}
-            initialData={
-              editingTransaction ??
-              (selectedType
-                ? {
-                    id: "",
-                    fecha: new Date().toISOString().split("T")[0],
-                    mesClave: selectedMonth,
-                    concepto: "",
-                    tipo: selectedType,
-                    categoria: "",
-                    importe: 0,
-                    metodo: "",
-                    cuentaOrigen: "",
-                    cuentaDestino: "",
-                    notas: "",
-                    reservaId: "",
-                    createdAt: "",
-                    updatedAt: "",
-                    deletedAt: "",
-                  }
-                : undefined)
-            }
+            initialData={editingTransaction ?? undefined}
+            defaultType={!editingTransaction && selectedType ? selectedType : undefined}
             onSuccess={() => {
               setShowForm(false);
               setEditingId(null);

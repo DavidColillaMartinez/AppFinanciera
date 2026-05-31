@@ -23,6 +23,7 @@ import {
   ArrowUpRight,
   Calendar,
   Clock,
+  Settings,
 } from "lucide-react";
 import {
   Dialog,
@@ -31,6 +32,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { TransactionForm } from "@/features/transactions/components/transaction-form";
+import { DashboardCustomizer } from "@/components/dashboard/dashboard-customizer";
 import { TransactionType } from "@/constants/enums";
 import { cn } from "@/lib/utils";
 import {
@@ -106,13 +108,17 @@ function MetricCard({
 }
 
 export default function VistaMesPage() {
-  const { sheetId } = useAppStore();
+  const { sheetId, dashboardConfig } = useAppStore();
   const [selectedMonth, setSelectedMonth] = useState(
     new Date().toISOString().slice(0, 7),
   );
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [showTransactionForm, setShowTransactionForm] = useState(false);
+  const [showCustomizer, setShowCustomizer] = useState(false);
   const [selectedType, setSelectedType] = useState<TransactionType | null>(null);
+
+  const widgets = dashboardConfig.widgets;
+  const isVisible = (id: string) => widgets.find((w) => w.id === id)?.visible ?? true;
 
   const {
     data: transactions,
@@ -220,62 +226,82 @@ export default function VistaMesPage() {
           </h1>
           <p className="text-sm text-muted-foreground">Vista del mes</p>
         </div>
-        <input
-          type="month"
-          value={selectedMonth}
-          onChange={(e) => setSelectedMonth(e.target.value)}
-          className="rounded-xl border border-input bg-card px-3 py-2 text-sm shadow-sm transition-colors hover:border-primary/50 focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/20"
-        />
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-9 w-9"
+            onClick={() => setShowCustomizer(true)}
+          >
+            <Settings className="h-4 w-4" />
+          </Button>
+          <input
+            type="month"
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(e.target.value)}
+            className="rounded-xl border border-input bg-card px-3 py-2 text-sm shadow-sm transition-colors hover:border-primary/50 focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/20"
+          />
+        </div>
       </div>
 
       <div className="space-y-3">
-        <MetricCard
-          title="Disponible"
-          value={`${disponible >= 0 ? "+" : ""}${disponible.toFixed(2)}`}
-          icon={Wallet}
-          colorClass={disponible >= 0 ? "text-income" : "text-expense"}
-          bgClass={disponible >= 0 ? "card-income" : "card-expense"}
-          delay={0}
-        />
+        {isVisible("balance") && (
+          <MetricCard
+            title="Disponible"
+            value={`${disponible >= 0 ? "+" : ""}${disponible.toFixed(2)}`}
+            icon={Wallet}
+            colorClass={disponible >= 0 ? "text-income" : "text-expense"}
+            bgClass={disponible >= 0 ? "card-income" : "card-expense"}
+            delay={0}
+          />
+        )}
         <div className="grid grid-cols-2 gap-3">
-          <MetricCard
-            title="Ingresos"
-            value={`+${income.toFixed(2)}`}
-            icon={TrendingUp}
-            colorClass="text-income"
-            bgClass="card-income"
-            delay={100}
-          />
-          <MetricCard
-            title="Gastos"
-            value={`-${expenses.toFixed(2)}`}
-            icon={TrendingDown}
-            colorClass="text-expense"
-            bgClass="card-expense"
-            delay={150}
-          />
+          {isVisible("income") && (
+            <MetricCard
+              title="Ingresos"
+              value={`+${income.toFixed(2)}`}
+              icon={TrendingUp}
+              colorClass="text-income"
+              bgClass="card-income"
+              delay={100}
+            />
+          )}
+          {isVisible("expenses") && (
+            <MetricCard
+              title="Gastos"
+              value={`-${expenses.toFixed(2)}`}
+              icon={TrendingDown}
+              colorClass="text-expense"
+              bgClass="card-expense"
+              delay={150}
+            />
+          )}
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <MetricCard
-            title="Ahorro"
-            value={`+${savings.toFixed(2)}`}
-            icon={PiggyBank}
-            colorClass="text-savings"
-            bgClass="card-savings"
-            delay={200}
-          />
-          <MetricCard
-            title="Pagos Restantes"
-            value={`-${pagosRestantes.toFixed(2)}`}
-            icon={Clock}
-            colorClass="text-warning"
-            bgClass="bg-warning/10 border-warning/20"
-            delay={250}
-          />
+          {isVisible("savings") && (
+            <MetricCard
+              title="Ahorro"
+              value={`+${savings.toFixed(2)}`}
+              icon={PiggyBank}
+              colorClass="text-savings"
+              bgClass="card-savings"
+              delay={200}
+            />
+          )}
+          {isVisible("balance") && (
+            <MetricCard
+              title="Pagos Restantes"
+              value={`-${pagosRestantes.toFixed(2)}`}
+              icon={Clock}
+              colorClass="text-warning"
+              bgClass="bg-warning/10 border-warning/20"
+              delay={250}
+            />
+          )}
         </div>
       </div>
 
-      {expensesByCategory.length > 0 && (
+      {isVisible("chart") && expensesByCategory.length > 0 && (
         <Card className="overflow-hidden animate-fade-in" style={{ animationDelay: "300ms" }}>
           <CardContent className="p-4">
             <h2 className="text-sm font-semibold mb-4">Gastos por categoría</h2>
@@ -304,7 +330,7 @@ export default function VistaMesPage() {
         </Card>
       )}
 
-      {recentTransactions.length > 0 && (
+      {isVisible("detail") && recentTransactions.length > 0 && (
         <Card className="overflow-hidden animate-fade-in" style={{ animationDelay: "350ms" }}>
           <CardContent className="p-4">
             <div className="flex items-center justify-between mb-4">
@@ -437,27 +463,7 @@ export default function VistaMesPage() {
             sheetId={sheetId}
             categories={categories ?? []}
             accounts={[]}
-            initialData={
-              selectedType
-                ? {
-                    id: "",
-                    fecha: new Date().toISOString().split("T")[0],
-                    mesClave: selectedMonth,
-                    concepto: "",
-                    tipo: selectedType,
-                    categoria: "",
-                    importe: 0,
-                    metodo: "",
-                    cuentaOrigen: "",
-                    cuentaDestino: "",
-                    notas: "",
-                    reservaId: "",
-                    createdAt: "",
-                    updatedAt: "",
-                    deletedAt: "",
-                  }
-                : undefined
-            }
+            defaultType={selectedType ?? undefined}
             onSuccess={() => {
               setShowTransactionForm(false);
               setSelectedType(null);
@@ -469,6 +475,8 @@ export default function VistaMesPage() {
           />
         </DialogContent>
       </Dialog>
+
+      <DashboardCustomizer open={showCustomizer} onOpenChange={setShowCustomizer} />
     </div>
   );
 }

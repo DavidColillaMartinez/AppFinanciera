@@ -14,6 +14,7 @@ import {
   Unlink,
   Palette,
   HelpCircle,
+  Activity,
 } from "lucide-react";
 
 export default function MorePage() {
@@ -206,10 +207,10 @@ export default function MorePage() {
 
         <Card className="overflow-hidden transition-all hover:shadow-md">
           <CardContent className="p-4">
-            <a href="/onboarding" className="flex items-center justify-between">
+            <a href="/more/diagnostico" className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="rounded-lg bg-primary/10 p-2.5">
-                  <FileSpreadsheet className="h-5 w-5 text-primary" />
+                  <Activity className="h-5 w-5 text-primary" />
                 </div>
                 <div>
                   <p className="font-medium text-sm">Diagnóstico Sheet</p>

@@ -35,6 +35,7 @@ interface TransactionFormProps {
   categories: CategoryRow[];
   accounts: AccountRow[];
   initialData?: TransactionRow;
+  defaultType?: TransactionType;
   onSuccess?: () => void;
   onCancel?: () => void;
 }
@@ -44,15 +45,16 @@ export function TransactionForm({
   categories,
   accounts,
   initialData,
+  defaultType,
   onSuccess,
   onCancel,
 }: TransactionFormProps) {
-  const isEditing = !!initialData;
+  const isEditing = !!initialData?.id;
   const [isSubmitting, setIsSubmitting] = useState(false);
   const createTransaction = useCreateTransaction(sheetId);
   const updateTransaction = useUpdateTransaction(sheetId);
 
-  const defaultValues: TransactionCreateInput = initialData
+  const defaultValues: TransactionCreateInput = initialData && isEditing
     ? {
         fecha: initialData.fecha,
         concepto: initialData.concepto,
@@ -68,7 +70,7 @@ export function TransactionForm({
     : {
         fecha: new Date().toISOString().split("T")[0],
         concepto: "",
-        tipo: TransactionType.GASTO,
+        tipo: defaultType ?? TransactionType.GASTO,
         categoria: "",
         importe: 0,
         metodo: "",

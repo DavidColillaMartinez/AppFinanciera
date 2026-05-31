@@ -14,7 +14,7 @@ import { useAppStore } from "@/stores/app-store";
 import { EmptyState } from "@/components/states/empty-state";
 import { LoadingState } from "@/components/states/loading-state";
 import { ErrorState } from "@/components/states/error-state";
-import { PlusIcon, PencilIcon, TrashIcon } from "lucide-react";
+import { PlusIcon, PencilIcon, TrashIcon, Tag } from "lucide-react";
 import type { CategoryRow } from "@/types/models";
 
 export default function SettingsPage() {
@@ -119,11 +119,31 @@ export default function SettingsPage() {
           )}
 
           {!isLoading && !isError && (categories ?? []).length === 0 && (
-            <EmptyState
-              title="Sin categorias"
-              description="Añade categorias para organizar tus movimientos."
-              type="empty"
-            />
+            <Card>
+              <CardContent className="p-8 text-center space-y-4">
+                <div className="mx-auto w-12 h-12 rounded-full bg-muted flex items-center justify-center">
+                  <Tag className="h-6 w-6 text-muted-foreground" />
+                </div>
+                <div className="space-y-2">
+                  <h3 className="font-semibold">Sin categorias</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Las categorias te ayudan a organizar tus movimientos.
+                    <br />
+                    Empieza creando algunas como: Comida, Transporte, Ocio, Nomina...
+                  </p>
+                </div>
+                <Button
+                  onClick={() => {
+                    setEditingId(null);
+                    setShowForm(true);
+                  }}
+                  className="gap-2"
+                >
+                  <PlusIcon className="h-4 w-4" />
+                  Crear primera categoria
+                </Button>
+              </CardContent>
+            </Card>
           )}
 
           {!isLoading && !isError && (categories ?? []).length > 0 && (
