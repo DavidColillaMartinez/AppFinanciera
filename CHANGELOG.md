@@ -44,6 +44,31 @@ Version inicial completa del PWA de finanzas personales.
 
 ---
 
+## 1.0.2
+
+Version de correcciones criticas para hacer la app funcional en Vercel.
+
+### Corregido
+
+- **OAuth Google en Vercel**: `/auth/google` era Server Component y usaba `window` para `redirect_uri`, dejando el parametro vacio. Ahora es Client Component con manejo de errores y construida en cliente.
+- **Escritura en Sheets**: `valueInputOption` e `insertDataOption` estaban en el body en lugar de query params. `batchUpdateSheet` enviaba array 3D incorrecto. Corregido.
+- **Indice de fila en updates**: `findRowIndexByColumnValue` devolvia `i+2` cuando debia ser `i+1`, desplazando todas las operaciones una fila.
+- **Columnas borradas en updates**: `updateRowByColumn` ponia `""` en todas las columnas no actualizadas, borrando IDs, fechas y flags. Ahora lee la fila existente primero y mezcla los cambios.
+- **Schema de transacciones**: `transactionUpdateSchema` exigia `mesClave` y `updatedAt` que el formulario de edicion no provee. Corregido.
+- **Auth gate**: Si no hay conexion a Sheet, ahora redirige a `/onboarding` en lugar de mostrar dashboard vacio.
+
+### Seguridad
+
+- `.OpencodeKey.txt` y patrones de secretos (`*.key`, `*.token`, `*.secret`, `credentials.json`, etc.) añadidos a `.gitignore`.
+
+---
+
+## 1.0.1
+
+Release interno con dashboard customization y CRUD de reservas/objetivos.
+
+---
+
 ## 0.0.0
 
 Base tecnica inicial del proyecto.
