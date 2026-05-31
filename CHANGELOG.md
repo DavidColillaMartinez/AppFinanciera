@@ -63,6 +63,21 @@ Version con rediseño visual y nuevos módulos de planificación financiera.
 
 ---
 
+## 1.1.1
+
+Version con modulo de movimientos de reservas y validacion reforzada de Sheet.
+
+### Añadido
+
+- **Movimientos de Reserva**: CRUD para registrar aportaciones y disposiciones de cada reserva. Boton "Mov." en cada tarjeta de reserva que abre un panel con el historial, totales de entrada/salida, y formulario para agregar movimientos.
+- **Validacion reforzada en onboarding**: Ahora comprueba las columnas exactas requeridas en cada hoja, no solo que exista. Muestra mensajes especificos para columnas faltantes, hojas faltantes y errores de permisos.
+
+### Corregido
+
+- Todos los fixes de v1.1.0 y v1.0.2 incluidos.
+
+---
+
 ## 1.0.2
 
 Version de correcciones criticas para hacer la app funcional en Vercel.
