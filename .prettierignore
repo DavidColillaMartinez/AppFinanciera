@@ -1,0 +1,8 @@
+.next
+node_modules
+.opencode
+.agents
+skills-lock.json
+tsconfig.tsbuildinfo
+package-lock.json
+plantilla_base_finanzas_app.xlsx
