@@ -12,9 +12,13 @@ import {
   Sparkles,
   PiggyBank,
   FileSpreadsheet,
+  DollarSign,
 } from "lucide-react";
+import { useAppStore } from "@/stores/app-store";
 
 export default function MorePage() {
+  const { monthlyIncome, incomeType } = useAppStore();
+
   return (
     <div className="px-4 py-6 space-y-6 pb-24">
       <div>
@@ -22,6 +26,40 @@ export default function MorePage() {
         <p className="text-sm text-muted-foreground">
           Configuracion y herramientas adicionales
         </p>
+      </div>
+
+      <div className="space-y-3">
+        <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide px-1">
+          Nomina
+        </h2>
+
+        <Card className="overflow-hidden transition-all hover:shadow-md border-primary/20">
+          <CardContent className="p-0">
+            <Link href="/more/salary" className="flex items-center justify-between p-4 active:bg-muted/50">
+              <div className="flex items-center gap-4">
+                <div className="rounded-xl bg-income/10 p-3">
+                  <DollarSign className="h-5 w-5 text-income" />
+                </div>
+                <div>
+                  <p className="font-semibold text-sm">Configurar nomina</p>
+                  <p className="text-xs text-muted-foreground">
+                    {monthlyIncome > 0
+                      ? `${incomeType === "fixed" ? "Fija" : "Variable"}: ${monthlyIncome.toFixed(2)} €`
+                      : "Define tu ingreso mensual"}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {monthlyIncome > 0 && (
+                  <span className="px-2 py-1 rounded-full bg-income/20 text-income text-xs font-medium">
+                    Activo
+                  </span>
+                )}
+                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+              </div>
+            </Link>
+          </CardContent>
+        </Card>
       </div>
 
       <div className="space-y-3">
@@ -61,7 +99,7 @@ export default function MorePage() {
                 <div>
                   <p className="font-semibold text-sm">Preferencias</p>
                   <p className="text-xs text-muted-foreground">
-                    Nomina, conexion y configuracion general
+                    Conexion y configuracion general
                   </p>
                 </div>
               </div>
