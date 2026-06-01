@@ -275,6 +275,27 @@ export const useAppStore = create<AppState & AppActions>()(
         salaryAddedMonths: state.salaryAddedMonths,
         monthlySavingsAddedMonths: state.monthlySavingsAddedMonths,
       }),
+      onRehydrateStorage: () => (state) => {
+        if (state) {
+          const stored = state.dashboardConfig;
+          const defaults = DEFAULT_DASHBOARD_CONFIG;
+          if (!stored || typeof stored !== "object") {
+            state.dashboardConfig = defaults;
+            return;
+          }
+          if (!Array.isArray(stored.widgets)) {
+            state.dashboardConfig = { ...defaults, ...stored, widgets: defaults.widgets };
+          } else {
+            const missingWidgets = defaults.widgets.filter(
+              (dw) => !stored.widgets.some((sw: DashboardWidget) => sw.id === dw.id)
+            );
+            state.dashboardConfig = { ...defaults, ...stored, widgets: [...stored.widgets, ...missingWidgets] };
+          }
+          if (!Array.isArray(stored.charts)) {
+            state.dashboardConfig = { ...state.dashboardConfig, charts: defaults.charts };
+          }
+        }
+      },
     },
   ),
 );

@@ -290,7 +290,7 @@ export default function VistaMesPage() {
   }, [totalIncome, monthlyIncome, totalExpensesWithFixed]);
 
   const chartData = useMemo(() => {
-    const activeCharts = dashboardConfig.charts.filter((c) => c.dataSource === "categories");
+    const activeCharts = (dashboardConfig.charts ?? []).filter((c) => c.dataSource === "categories");
     if (activeCharts.length > 0) return expensesByCategory;
     return expensesByCategory;
   }, [dashboardConfig.charts, expensesByCategory]);
