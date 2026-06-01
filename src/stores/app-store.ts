@@ -8,10 +8,32 @@ export interface DashboardWidget {
   visible: boolean;
 }
 
+export type ChartType = "bar" | "pie" | "area" | "line";
+
+export type ChartDataSource =
+  | "categories"
+  | "expenses"
+  | "savings"
+  | "income"
+  | "total"
+  | "fixed"
+  | "deferred"
+  | "future";
+
+export interface DashboardChart {
+  id: string;
+  name: string;
+  type: ChartType;
+  dataSource: ChartDataSource;
+  accentColor: string;
+  animations: boolean;
+  showLabels: boolean;
+}
+
 export interface DashboardConfig {
   widgets: DashboardWidget[];
   monthSelectorVisible: boolean;
-  chartType: "categories" | "expenses" | "savings";
+  charts: DashboardChart[];
 }
 
 const DEFAULT_DASHBOARD_CONFIG: DashboardConfig = {
@@ -25,7 +47,17 @@ const DEFAULT_DASHBOARD_CONFIG: DashboardConfig = {
     { id: "savingsPlan", visible: true },
   ],
   monthSelectorVisible: true,
-  chartType: "categories",
+  charts: [
+    {
+      id: "default-categories",
+      name: "Gastos por categoria",
+      type: "pie",
+      dataSource: "categories",
+      accentColor: "#3B82F6",
+      animations: true,
+      showLabels: false,
+    },
+  ],
 };
 
 export interface AppState {
@@ -64,6 +96,10 @@ export interface AppActions {
   addSalaryMonth: (monthKey: string) => void;
   addMonthlySavingsMonth: (monthKey: string) => void;
   removeMonthlySavingsMonth: (monthKey: string) => void;
+  addChart: (chart: Omit<DashboardChart, "id">) => void;
+  updateChart: (chartId: string, updates: Partial<DashboardChart>) => void;
+  removeChart: (chartId: string) => void;
+  reorderCharts: (fromIndex: number, toIndex: number) => void;
 }
 
 export const useAppStore = create<AppState & AppActions>()(
@@ -182,6 +218,45 @@ export const useAppStore = create<AppState & AppActions>()(
         set((state) => ({
           monthlySavingsAddedMonths: state.monthlySavingsAddedMonths.filter((m) => m !== monthKey),
         })),
+
+      addChart: (chart) =>
+        set((state) => ({
+          dashboardConfig: {
+            ...state.dashboardConfig,
+            charts: [
+              ...state.dashboardConfig.charts,
+              { ...chart, id: `chart-${Date.now()}` },
+            ],
+          },
+        })),
+
+      updateChart: (chartId, updates) =>
+        set((state) => ({
+          dashboardConfig: {
+            ...state.dashboardConfig,
+            charts: state.dashboardConfig.charts.map((c) =>
+              c.id === chartId ? { ...c, ...updates } : c
+            ),
+          },
+        })),
+
+      removeChart: (chartId) =>
+        set((state) => ({
+          dashboardConfig: {
+            ...state.dashboardConfig,
+            charts: state.dashboardConfig.charts.filter((c) => c.id !== chartId),
+          },
+        })),
+
+      reorderCharts: (fromIndex, toIndex) =>
+        set((state) => {
+          const charts = [...state.dashboardConfig.charts];
+          const [removed] = charts.splice(fromIndex, 1);
+          charts.splice(toIndex, 0, removed);
+          return {
+            dashboardConfig: { ...state.dashboardConfig, charts },
+          };
+        }),
     }),
     {
       name: STORAGE_KEY,

@@ -289,26 +289,10 @@ export default function VistaMesPage() {
   }, [totalIncome, monthlyIncome, totalExpensesWithFixed]);
 
   const chartData = useMemo(() => {
-    switch (dashboardConfig.chartType) {
-      case "expenses":
-        return fixedExpenses?.map((exp, i) => ({
-          name: exp.concepto,
-          value: exp.frecuencia === "Mensual" ? exp.importe : exp.importe / 3,
-          color: COLORS[i % COLORS.length],
-        })) ?? [];
-      case "savings":
-        return filteredTransactions
-          .filter((t) => t.tipo === "Ahorro")
-          .slice(0, 10)
-          .map((t, i) => ({
-            name: t.concepto || "Ahorro",
-            value: t.importe,
-            color: COLORS[i % COLORS.length],
-          }));
-      default:
-        return expensesByCategory;
-    }
-  }, [dashboardConfig.chartType, fixedExpenses, filteredTransactions, expensesByCategory]);
+    const activeCharts = dashboardConfig.charts.filter((c) => c.dataSource === "categories");
+    if (activeCharts.length > 0) return expensesByCategory;
+    return expensesByCategory;
+  }, [dashboardConfig.charts, expensesByCategory]);
 
   const recentTransactions = useMemo(() => {
     return filteredTransactions.slice(0, 5);
@@ -430,8 +414,7 @@ export default function VistaMesPage() {
         <Card className="overflow-hidden animate-fade-in" style={{ animationDelay: "300ms" }}>
           <CardContent className="p-4">
             <h2 className="text-sm font-semibold mb-4">
-              {dashboardConfig.chartType === "expenses" ? "Gastos fijos" :
-               dashboardConfig.chartType === "savings" ? "Ahorros" : "Gastos por categoria"}
+              {dashboardConfig.charts.length > 0 ? dashboardConfig.charts[0].name : "Gastos por categoria"}
             </h2>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
