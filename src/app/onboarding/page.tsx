@@ -38,7 +38,9 @@ function OnboardingContent() {
   });
   const [error, setError] = useState<string | null>(
     errorParam === "auth_failed"
-      ? "Error al iniciar sesion con Google. Intentalo de nuevo."
+      ? "Tu sesion ha expirado. Inicia sesion de nuevo para continuar."
+      : errorParam === "auth_required"
+      ? "Necesitas iniciar sesion con Google para usar la app."
       : null,
   );
   const [validating, setValidating] = useState(false);
@@ -178,6 +180,7 @@ function OnboardingContent() {
 
   function handleManualPaste() {
     setStep("sheet");
+    setError("Inicia sesion con Google primero.");
   }
 
   if (step === "done") {

@@ -146,6 +146,10 @@ export class SheetsApiError extends Error {
   isQuotaError(): boolean {
     return this.statusCode === 429;
   }
+
+  isAuthError(): boolean {
+    return this.statusCode === 401 || this.statusCode === 403;
+  }
 }
 
 export function getToken(): string | null {
