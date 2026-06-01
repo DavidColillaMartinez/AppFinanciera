@@ -11,6 +11,12 @@ import {
 import { categorySheetSchema } from "@/schemas/category";
 import type { CategoryRow } from "@/types/models";
 import { nowISO } from "@/lib/sheets/adapters";
+import {
+  DEFAULT_CATEGORIES,
+  buildCategoryRow,
+  getMissingCategories,
+  hasCategories,
+} from "@/lib/categories/defaults";
 
 function rowToCategory(row: Record<string, string>): CategoryRow {
   return {
@@ -181,4 +187,61 @@ export function useDeleteCategory(sheetId: string | null) {
       queryClient.invalidateQueries({ queryKey: ["categories"] });
     },
   });
+}
+
+export function useSeedDefaultCategories(sheetId: string | null) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (existingCategories: CategoryRow[]) => {
+      if (!sheetId) throw new Error("No sheet connected");
+      const token = getToken();
+      if (!token) throw new Error("No access token");
+
+      if (hasCategories(existingCategories)) {
+        return { created: 0, skipped: true };
+      }
+
+      const missing = getMissingCategories(existingCategories, DEFAULT_CATEGORIES);
+      const now = nowISO();
+      let created = 0;
+
+      for (const cat of missing) {
+        const rowData = {
+          ...buildCategoryRow(cat),
+          categoriaId: `CAT-${Date.now()}-${created}`,
+          createdAt: now,
+          updatedAt: now,
+        };
+
+        await appendModelRow(
+          sheetId,
+          SHEET_NAMES.CATEGORIAS,
+          CATEGORIAS_HEADERS,
+          rowData,
+          token,
+        );
+        created++;
+      }
+
+      return { created, skipped: false };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["categories"] });
+    },
+  });
+}
+
+export function checkDuplicateCategory(
+  categories: CategoryRow[],
+  name: string,
+  excludeId?: string
+): boolean {
+  const normalizedName = name.toLowerCase().trim();
+  return categories.some(
+    (c) =>
+      c.activo === "S" &&
+      c.nombre.toLowerCase().trim() === normalizedName &&
+      c.categoriaId !== excludeId
+  );
 }

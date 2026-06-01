@@ -26,6 +26,7 @@ interface CategoryFormProps {
   initialData?: CategoryRow;
   onSuccess?: () => void;
   onCancel?: () => void;
+  onValidate?: (name: string, excludeId?: string) => boolean;
 }
 
 export function CategoryForm({
@@ -33,10 +34,12 @@ export function CategoryForm({
   initialData,
   onSuccess,
   onCancel,
+  onValidate,
 }: CategoryFormProps) {
-  const isEditing = !!initialData;
+  const isEditing = !!initialData?.categoriaId;
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [localError, setLocalError] = useState<string | null>(null);
   const createCategory = useCreateCategory(sheetId);
   const updateCategory = useUpdateCategory(sheetId);
 
@@ -73,8 +76,14 @@ export function CategoryForm({
   });
 
   async function onSubmit(data: CategoryCreateInput) {
-    setIsSubmitting(true);
     setSubmitError(null);
+    setLocalError(null);
+
+    if (onValidate && !onValidate(data.nombre, initialData?.categoriaId)) {
+      return;
+    }
+
+    setIsSubmitting(true);
     try {
       if (isEditing && initialData) {
         await updateCategory.mutateAsync({
@@ -91,7 +100,6 @@ export function CategoryForm({
     } catch (e) {
       const message = e instanceof Error ? e.message : "Error al guardar";
       setSubmitError(message);
-      console.error("Error saving category:", e);
     } finally {
       setIsSubmitting(false);
     }
@@ -111,6 +119,11 @@ export function CategoryForm({
           </div>
         )}
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          {(submitError || localError) && (
+            <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+              {localError || submitError}
+            </div>
+          )}
           <div className="space-y-2">
             <Label htmlFor="nombre">Nombre</Label>
             <Input

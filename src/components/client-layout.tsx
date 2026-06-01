@@ -6,8 +6,10 @@ import { useState, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/stores/app-store";
+import { hasToken } from "@/lib/sheets/client";
 import { BottomNav } from "@/components/bottom-nav";
 import { Button } from "@/components/ui/button";
+import { ToastProvider } from "@/components/ui/toast";
 
 function GoogleReconnectPrompt() {
   function handleReconnect() {
@@ -57,7 +59,7 @@ function GoogleReconnectPrompt() {
   );
 }
 
-const PUBLIC_ROUTES = ["/onboarding", "/auth/google", "/auth/callback", "/_not-found"];
+const PUBLIC_ROUTES = ["/onboarding", "/auth/google", "/auth/callback", "/_not-found", "/settings", "/settings/preferencias"];
 
 export function ClientLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -76,9 +78,11 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
 
   const { isConnected, hasSeenOnboarding } = useAppStore();
   const [mounted, setMounted] = useState(false);
+  const [hasGoogleToken, setHasGoogleToken] = useState(false);
 
   useEffect(() => {
     setMounted(true);
+    setHasGoogleToken(hasToken());
   }, []);
 
   useEffect(() => {
@@ -97,30 +101,30 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     return null;
   }
 
+  const showReconnectPrompt =
+    mounted && hasSeenOnboarding && isConnected && !hasGoogleToken;
+
   return (
-    <QueryClientProvider client={queryClient}>
-      <ThemeProvider
-        attribute="class"
-        defaultTheme="light"
-        enableSystem
-        disableTransitionOnChange
-      >
-        {!hasSeenOnboarding || !isConnected ? (
-          <>
-            <div className={cn("min-h-dvh bg-background text-foreground")}>
-              {children}
-            </div>
-            {isConnected && <BottomNav />}
-          </>
-        ) : (
-          <>
-            <div className={cn("min-h-dvh bg-background text-foreground")}>
-              {children}
-            </div>
-            <BottomNav />
-          </>
-        )}
-      </ThemeProvider>
-    </QueryClientProvider>
+    <ToastProvider>
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="light"
+          enableSystem
+          disableTransitionOnChange
+        >
+          {showReconnectPrompt ? (
+            <GoogleReconnectPrompt />
+          ) : (
+            <>
+              <div className={cn("min-h-dvh bg-background text-foreground")}>
+                {children}
+              </div>
+              {isConnected && <BottomNav />}
+            </>
+          )}
+        </ThemeProvider>
+      </QueryClientProvider>
+    </ToastProvider>
   );
 }

@@ -40,6 +40,9 @@ export interface AppState {
   connectionErrors: string[];
   hasSeenOnboarding: boolean;
   dashboardConfig: DashboardConfig;
+  monthlyIncome: number;
+  incomeType: "fixed" | "variable";
+  lastIncomeSetMonth: string | null;
 }
 
 export interface AppActions {
@@ -53,6 +56,8 @@ export interface AppActions {
   toggleWidget: (widgetId: string) => void;
   moveWidget: (widgetId: string, direction: "up" | "down") => void;
   resetDashboardConfig: () => void;
+  setMonthlyIncome: (amount: number, type: "fixed" | "variable") => void;
+  clearMonthlyIncome: () => void;
 }
 
 export const useAppStore = create<AppState & AppActions>()(
@@ -69,6 +74,9 @@ export const useAppStore = create<AppState & AppActions>()(
       connectionErrors: [],
       hasSeenOnboarding: false,
       dashboardConfig: DEFAULT_DASHBOARD_CONFIG,
+      monthlyIncome: 0,
+      incomeType: "fixed",
+      lastIncomeSetMonth: null,
 
       setSheetConnection: (sheetId, sheetUrl) =>
         set({
@@ -126,6 +134,20 @@ export const useAppStore = create<AppState & AppActions>()(
 
       resetDashboardConfig: () =>
         set({ dashboardConfig: DEFAULT_DASHBOARD_CONFIG }),
+
+      setMonthlyIncome: (amount, type) =>
+        set({
+          monthlyIncome: amount,
+          incomeType: type,
+          lastIncomeSetMonth: new Date().toISOString().slice(0, 7),
+        }),
+
+      clearMonthlyIncome: () =>
+        set({
+          monthlyIncome: 0,
+          incomeType: "fixed",
+          lastIncomeSetMonth: null,
+        }),
     }),
     {
       name: STORAGE_KEY,
@@ -138,6 +160,9 @@ export const useAppStore = create<AppState & AppActions>()(
         activeYear: state.activeYear,
         hasSeenOnboarding: state.hasSeenOnboarding,
         dashboardConfig: state.dashboardConfig,
+        monthlyIncome: state.monthlyIncome,
+        incomeType: state.incomeType,
+        lastIncomeSetMonth: state.lastIncomeSetMonth,
       }),
     },
   ),
