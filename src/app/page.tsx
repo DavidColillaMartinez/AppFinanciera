@@ -34,6 +34,10 @@ import {
 import { TransactionForm } from "@/features/transactions/components/transaction-form";
 import { DashboardCustomizer } from "@/components/dashboard/dashboard-customizer";
 import { SavingsPanelExpanded } from "@/components/dashboard/savings-panel-expanded";
+import {
+  useWidgetReorder,
+  ReorderOverlay,
+} from "@/components/dashboard/widget-reorder";
 import { TransactionType } from "@/constants/enums";
 import { cn } from "@/lib/utils";
 import {
@@ -149,6 +153,21 @@ export default function VistaMesPage() {
 
   const widgets = dashboardConfig.widgets;
   const isVisible = (id: string) => widgets.find((w) => w.id === id)?.visible ?? true;
+
+  const {
+    reorderWidgets,
+  } = useAppStore();
+  const {
+    isReorderMode,
+    enterReorderMode,
+    exitReorderMode,
+    confirmReorder,
+    selectForReorder,
+    pickedIndex,
+    activeIndex,
+  } = useWidgetReorder(widgets, (from, to) => {
+    reorderWidgets(from, to);
+  });
 
   const {
     data: transactions,

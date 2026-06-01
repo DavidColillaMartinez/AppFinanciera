@@ -57,6 +57,7 @@ export interface AppActions {
   setDashboardConfig: (config: Partial<DashboardConfig>) => void;
   toggleWidget: (widgetId: string) => void;
   moveWidget: (widgetId: string, direction: "up" | "down") => void;
+  reorderWidgets: (fromIndex: number, toIndex: number) => void;
   resetDashboardConfig: () => void;
   setMonthlyIncome: (amount: number, type: "fixed" | "variable") => void;
   clearMonthlyIncome: () => void;
@@ -134,6 +135,16 @@ export const useAppStore = create<AppState & AppActions>()(
           const newIdx = direction === "up" ? idx - 1 : idx + 1;
           if (newIdx < 0 || newIdx >= widgets.length) return state;
           [widgets[idx], widgets[newIdx]] = [widgets[newIdx], widgets[idx]];
+          return {
+            dashboardConfig: { ...state.dashboardConfig, widgets },
+          };
+        }),
+
+      reorderWidgets: (fromIndex, toIndex) =>
+        set((state) => {
+          const widgets = [...state.dashboardConfig.widgets];
+          const [removed] = widgets.splice(fromIndex, 1);
+          widgets.splice(toIndex, 0, removed);
           return {
             dashboardConfig: { ...state.dashboardConfig, widgets },
           };
