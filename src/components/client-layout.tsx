@@ -8,9 +8,15 @@ import { cn } from "@/lib/utils";
 import { useAppStore } from "@/stores/app-store";
 import { BottomNav } from "@/components/bottom-nav";
 import { ToastProvider } from "@/components/ui/toast";
-import { getToken } from "@/lib/sheets/client";
 
-const PUBLIC_ROUTES = ["/onboarding", "/auth/google", "/auth/callback", "/_not-found", "/settings", "/settings/preferencias"];
+const PUBLIC_ROUTES = [
+  "/onboarding",
+  "/auth/google",
+  "/auth/callback",
+  "/_not-found",
+  "/settings",
+  "/settings/preferencias",
+];
 
 export function ClientLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -24,10 +30,10 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
             retry: 1,
           },
         },
-      }),
+      })
   );
 
-  const { isConnected, hasSeenOnboarding, disconnect } = useAppStore();
+  const { isConnected, hasSeenOnboarding } = useAppStore();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -36,22 +42,15 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!mounted) return;
-    const isPublicRoute = PUBLIC_ROUTES.some((route) =>
-      pathname === route || pathname.startsWith(route + "/")
+    const isPublicRoute = PUBLIC_ROUTES.some(
+      (route) => pathname === route || pathname.startsWith(route + "/")
     );
     if (isPublicRoute) return;
 
     if (!hasSeenOnboarding || !isConnected) {
       router.replace("/onboarding");
-      return;
     }
-
-    const token = getToken();
-    if (!token) {
-      disconnect();
-      router.replace("/onboarding?error=auth_required");
-    }
-  }, [mounted, hasSeenOnboarding, isConnected, pathname, router, disconnect]);
+  }, [mounted, hasSeenOnboarding, isConnected, pathname, router]);
 
   if (!mounted) {
     return null;
