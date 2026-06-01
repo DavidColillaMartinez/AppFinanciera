@@ -43,6 +43,8 @@ export interface AppState {
   monthlyIncome: number;
   incomeType: "fixed" | "variable";
   lastIncomeSetMonth: string | null;
+  salaryAddedMonths: string[];
+  monthlySavingsAddedMonths: string[];
 }
 
 export interface AppActions {
@@ -58,6 +60,9 @@ export interface AppActions {
   resetDashboardConfig: () => void;
   setMonthlyIncome: (amount: number, type: "fixed" | "variable") => void;
   clearMonthlyIncome: () => void;
+  addSalaryMonth: (monthKey: string) => void;
+  addMonthlySavingsMonth: (monthKey: string) => void;
+  removeMonthlySavingsMonth: (monthKey: string) => void;
 }
 
 export const useAppStore = create<AppState & AppActions>()(
@@ -77,6 +82,8 @@ export const useAppStore = create<AppState & AppActions>()(
       monthlyIncome: 0,
       incomeType: "fixed",
       lastIncomeSetMonth: null,
+      salaryAddedMonths: [],
+      monthlySavingsAddedMonths: [],
 
       setSheetConnection: (sheetId, sheetUrl) =>
         set({
@@ -147,7 +154,23 @@ export const useAppStore = create<AppState & AppActions>()(
           monthlyIncome: 0,
           incomeType: "fixed",
           lastIncomeSetMonth: null,
+          salaryAddedMonths: [],
         }),
+
+      addSalaryMonth: (monthKey) =>
+        set((state) => ({
+          salaryAddedMonths: [...new Set([...state.salaryAddedMonths, monthKey])],
+        })),
+
+      addMonthlySavingsMonth: (monthKey) =>
+        set((state) => ({
+          monthlySavingsAddedMonths: [...new Set([...state.monthlySavingsAddedMonths, monthKey])],
+        })),
+
+      removeMonthlySavingsMonth: (monthKey) =>
+        set((state) => ({
+          monthlySavingsAddedMonths: state.monthlySavingsAddedMonths.filter((m) => m !== monthKey),
+        })),
     }),
     {
       name: STORAGE_KEY,
@@ -163,6 +186,8 @@ export const useAppStore = create<AppState & AppActions>()(
         monthlyIncome: state.monthlyIncome,
         incomeType: state.incomeType,
         lastIncomeSetMonth: state.lastIncomeSetMonth,
+        salaryAddedMonths: state.salaryAddedMonths,
+        monthlySavingsAddedMonths: state.monthlySavingsAddedMonths,
       }),
     },
   ),
