@@ -38,6 +38,7 @@ import {
   useWidgetReorder,
   ReorderOverlay,
 } from "@/components/dashboard/widget-reorder";
+import { ChartRenderer } from "@/components/dashboard/chart-renderer";
 import { TransactionType } from "@/constants/enums";
 import { cn } from "@/lib/utils";
 import {
@@ -410,33 +411,30 @@ export default function VistaMesPage() {
 
       {savingsExpanded && <SavingsPanelExpanded />}
 
-      {isVisible("chart") && chartData.length > 0 && (
-        <Card className="overflow-hidden animate-fade-in" style={{ animationDelay: "300ms" }}>
+      {isVisible("chart") && dashboardConfig.charts.length > 0 && (
+        <Card
+          className="overflow-hidden animate-fade-in"
+          style={{ animationDelay: "300ms", borderColor: dashboardConfig.charts[0].accentColor + "30" }}
+        >
           <CardContent className="p-4">
-            <h2 className="text-sm font-semibold mb-4">
-              {dashboardConfig.charts.length > 0 ? dashboardConfig.charts[0].name : "Gastos por categoria"}
+            <h2 className="text-sm font-semibold mb-4 flex items-center gap-2">
+              {dashboardConfig.charts[0].name}
             </h2>
             <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={chartData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={50}
-                    outerRadius={80}
-                    paddingAngle={2}
-                    dataKey="value"
-                  >
-                    {chartData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(value) => Number(value).toFixed(2)} />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
+              <ChartRenderer
+                chart={dashboardConfig.charts[0]}
+                data={chartData}
+              />
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {isVisible("chart") && dashboardConfig.charts.length === 0 && (
+        <Card className="overflow-hidden animate-fade-in" style={{ animationDelay: "300ms" }}>
+          <CardContent className="p-4 text-center py-8">
+            <p className="text-sm text-muted-foreground">No hay graficos creados.</p>
+            <p className="text-xs text-muted-foreground mt-1">Usa el boton de personalizar para crear uno.</p>
           </CardContent>
         </Card>
       )}
