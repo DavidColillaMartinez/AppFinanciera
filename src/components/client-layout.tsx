@@ -2,29 +2,38 @@
 
 import { ThemeProvider } from "@/components/theme-provider";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/stores/app-store";
-import { hasToken } from "@/lib/sheets/client";
+import { hasToken, getToken } from "@/lib/sheets/client";
 import { BottomNav } from "@/components/bottom-nav";
+import { Button } from "@/components/ui/button";
 
-function GoogleReconnectPrompt() {
+function GoogleReconnectPrompt({ onReconnected }: { onReconnected?: () => void }) {
+  const router = useRouter();
+
+  function handleReconnect() {
+    router.push("/auth/google");
+  }
+
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center px-4 text-center">
       <div className="w-full max-w-sm space-y-6">
         <div className="space-y-2">
+          <div className="text-6xl">🔐</div>
           <h1 className="text-2xl font-bold tracking-tight">
-            Finanzas Personales
+            Sesion Caducada
           </h1>
           <p className="text-sm text-muted-foreground">
-            Tu sesion de Google ha caducado. Pulsa el boton para conectar de
-            nuevo.
+            Tu sesion de Google ha expirado. Pulsa el boton para conectar de
+            nuevo y continuar usando la app.
           </p>
         </div>
-        <a
-          href="/auth/google"
-          className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#4285F4] px-4 py-3 text-sm font-medium text-white shadow hover:bg-[#3367D6] transition-colors"
+        <Button
+          onClick={handleReconnect}
+          className="w-full gap-2"
+          size="lg"
         >
           <svg className="h-5 w-5" viewBox="0 0 24 24">
             <path
@@ -45,7 +54,7 @@ function GoogleReconnectPrompt() {
             />
           </svg>
           Conectar con Google
-        </a>
+        </Button>
       </div>
     </div>
   );
@@ -72,10 +81,14 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
   const [hasGoogleToken, setHasGoogleToken] = useState(false);
   const [mounted, setMounted] = useState(false);
 
-  useEffect(() => {
-    setMounted(true);
+  const checkToken = useCallback(() => {
     setHasGoogleToken(hasToken());
   }, []);
+
+  useEffect(() => {
+    setMounted(true);
+    checkToken();
+  }, [checkToken]);
 
   useEffect(() => {
     if (!mounted) return;
@@ -86,16 +99,35 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
 
     if (!hasSeenOnboarding || !isConnected) {
       router.replace("/onboarding");
-    } else if (isConnected && !hasGoogleToken) {
     }
-  }, [mounted, hasSeenOnboarding, isConnected, hasGoogleToken, pathname, router]);
+  }, [mounted, hasSeenOnboarding, isConnected, pathname, router]);
+
+  useEffect(() => {
+    if (!mounted || !isConnected) return;
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === "google_access_token") {
+        checkToken();
+        if (hasToken()) {
+          window.location.reload();
+        }
+      }
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+    const interval = setInterval(checkToken, 2000);
+
+    return () => {
+      window.removeEventListener("storage", handleStorageChange);
+      clearInterval(interval);
+    };
+  }, [mounted, isConnected, checkToken, router]);
 
   if (!mounted) {
     return null;
   }
 
   const showReconnectPrompt =
-    mounted && hasSeenOnboarding && !hasGoogleToken && isConnected;
+    mounted && hasSeenOnboarding && isConnected && !hasGoogleToken;
   const showNoConnection = mounted && !isConnected;
 
   return (
@@ -107,7 +139,7 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
         disableTransitionOnChange
       >
         {showReconnectPrompt ? (
-          <GoogleReconnectPrompt />
+          <GoogleReconnectPrompt onReconnected={checkToken} />
         ) : (
           <>
             <div className={cn("min-h-dvh bg-background text-foreground")}>

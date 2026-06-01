@@ -11,6 +11,7 @@ export interface DashboardWidget {
 export interface DashboardConfig {
   widgets: DashboardWidget[];
   monthSelectorVisible: boolean;
+  chartType: "categories" | "expenses" | "savings";
 }
 
 const DEFAULT_DASHBOARD_CONFIG: DashboardConfig = {
@@ -21,8 +22,10 @@ const DEFAULT_DASHBOARD_CONFIG: DashboardConfig = {
     { id: "expenses", visible: true },
     { id: "chart", visible: true },
     { id: "detail", visible: true },
+    { id: "savingsPlan", visible: true },
   ],
   monthSelectorVisible: true,
+  chartType: "categories",
 };
 
 export interface AppState {

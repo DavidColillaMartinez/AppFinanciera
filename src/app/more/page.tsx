@@ -188,15 +188,15 @@ export default function MorePage() {
 
         <Card className="overflow-hidden transition-all hover:shadow-md">
           <CardContent className="p-4">
-            <a href="/settings?tab=preferences" className="flex items-center justify-between">
+            <a href="/#customize" className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="rounded-lg bg-primary/10 p-2.5">
                   <Palette className="h-5 w-5 text-primary" />
                 </div>
                 <div>
-                  <p className="font-medium text-sm">Personalización</p>
+                  <p className="font-medium text-sm">Personalizar Dashboard</p>
                   <p className="text-xs text-muted-foreground">
-                    Dashboard y preferencias visuales
+                    Elegir widgets y tipo de grafico
                   </p>
                 </div>
               </div>

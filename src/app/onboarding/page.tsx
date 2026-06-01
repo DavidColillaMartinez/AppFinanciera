@@ -30,7 +30,12 @@ function OnboardingContent() {
   const { sheetId, isConnected, setSheetConnection, hasSeenOnboarding } =
     useAppStore();
   const [step, setStep] = useState<Step>("google");
-  const [sheetUrl, setSheetUrl] = useState("");
+  const [sheetUrl, setSheetUrl] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("last_sheet_url") ?? "";
+    }
+    return "";
+  });
   const [error, setError] = useState<string | null>(
     errorParam === "auth_failed"
       ? "Error al iniciar sesion con Google. Intentalo de nuevo."
@@ -157,6 +162,7 @@ function OnboardingContent() {
         parsed,
         `https://docs.google.com/spreadsheets/d/${parsed}`,
       );
+      localStorage.setItem("last_sheet_url", `https://docs.google.com/spreadsheets/d/${parsed}`);
       setStep("done");
       router.replace("/");
     } catch (e) {
@@ -277,6 +283,26 @@ function OnboardingContent() {
               >
                 Ya tengo sesion - conectar Sheet
               </Button>
+
+              <div className="rounded-lg border border-blue-100 bg-blue-50 p-4">
+                <p className="text-sm font-medium text-blue-900 mb-2">
+                  Descargar plantilla
+                </p>
+                <p className="text-xs text-blue-700 mb-3">
+                  Si es tu primera vez, descarga la plantilla de Google Sheets.
+                </p>
+                <a
+                  href="https://github.com/DavidColillaMartinez/AppFinanciera/raw/master/plantilla_base_finanzas_app.xlsx"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 font-medium"
+                >
+                  <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
+                  </svg>
+                  Descargar plantilla Excel
+                </a>
+              </div>
             </CardContent>
           </Card>
         )}

@@ -198,6 +198,44 @@ export default function VistaMesPage() {
     }));
   }, [filteredTransactions, categories]);
 
+  const savingsPlanData = useMemo(() => {
+    if (income === 0) return null;
+    const totalFixed = fixedMonthly + deferredMonthly + futureMonthly;
+    const netForMonth = income - totalFixed;
+    const suggestedSavings = netForMonth * 0.2;
+    const discretionaryBudget = netForMonth - suggestedSavings;
+    return {
+      income,
+      totalFixed,
+      netForMonth,
+      suggestedSavings,
+      discretionaryBudget,
+      savingsRate: 20,
+    };
+  }, [income, fixedMonthly, deferredMonthly, futureMonthly]);
+
+  const chartData = useMemo(() => {
+    switch (dashboardConfig.chartType) {
+      case "expenses":
+        return fixedExpenses?.map((exp, i) => ({
+          name: exp.concepto,
+          value: exp.frecuencia === "Mensual" ? exp.importe : exp.importe / 3,
+          color: COLORS[i % COLORS.length],
+        })) ?? [];
+      case "savings":
+        return filteredTransactions
+          .filter((t) => t.tipo === "Ahorro")
+          .slice(0, 10)
+          .map((t, i) => ({
+            name: t.concepto || "Ahorro",
+            value: t.importe,
+            color: COLORS[i % COLORS.length],
+          }));
+      default:
+        return expensesByCategory;
+    }
+  }, [dashboardConfig.chartType, fixedExpenses, filteredTransactions, expensesByCategory]);
+
   const recentTransactions = useMemo(() => {
     return filteredTransactions.slice(0, 5);
   }, [filteredTransactions]);
@@ -228,12 +266,13 @@ export default function VistaMesPage() {
         </div>
         <div className="flex items-center gap-2">
           <Button
-            variant="ghost"
-            size="icon"
-            className="h-9 w-9"
+            variant="outline"
+            size="sm"
+            className="gap-2"
             onClick={() => setShowCustomizer(true)}
           >
             <Settings className="h-4 w-4" />
+            Personalizar
           </Button>
           <input
             type="month"
@@ -301,15 +340,18 @@ export default function VistaMesPage() {
         </div>
       </div>
 
-      {isVisible("chart") && expensesByCategory.length > 0 && (
+      {isVisible("chart") && chartData.length > 0 && (
         <Card className="overflow-hidden animate-fade-in" style={{ animationDelay: "300ms" }}>
           <CardContent className="p-4">
-            <h2 className="text-sm font-semibold mb-4">Gastos por categoría</h2>
+            <h2 className="text-sm font-semibold mb-4">
+              {dashboardConfig.chartType === "expenses" ? "Gastos fijos" :
+               dashboardConfig.chartType === "savings" ? "Ahorros" : "Gastos por categoria"}
+            </h2>
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
-                    data={expensesByCategory}
+                    data={chartData}
                     cx="50%"
                     cy="50%"
                     innerRadius={50}
@@ -317,7 +359,7 @@ export default function VistaMesPage() {
                     paddingAngle={2}
                     dataKey="value"
                   >
-                    {expensesByCategory.map((entry, index) => (
+                    {chartData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Pie>
@@ -325,6 +367,46 @@ export default function VistaMesPage() {
                   <Legend />
                 </PieChart>
               </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {isVisible("savingsPlan") && savingsPlanData && (
+        <Card className="overflow-hidden animate-fade-in border-blue-200 bg-blue-50/50" style={{ animationDelay: "320ms" }}>
+          <CardContent className="p-4">
+            <h2 className="text-sm font-semibold mb-4 flex items-center gap-2">
+              Plan de ahorro del mes
+            </h2>
+            <div className="space-y-3">
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Ingresos</span>
+                <span className="font-medium text-income">+{savingsPlanData.income.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Gastos fijos mensuales</span>
+                <span className="font-medium">-{savingsPlanData.totalFixed.toFixed(2)}</span>
+              </div>
+              <div className="h-px bg-border" />
+              <div className="flex justify-between text-sm font-medium">
+                <span className="text-muted-foreground">Disponible</span>
+                <span className={savingsPlanData.netForMonth >= 0 ? "text-income" : "text-expense"}>
+                  {savingsPlanData.netForMonth >= 0 ? "+" : ""}{savingsPlanData.netForMonth.toFixed(2)}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Sugerencia: 20% ahorro</span>
+                <span className="font-medium text-savings">+{savingsPlanData.suggestedSavings.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Para gastos variables</span>
+                <span className="font-medium">{savingsPlanData.discretionaryBudget.toFixed(2)}</span>
+              </div>
+              {savingsPlanData.netForMonth < 0 && (
+                <div className="rounded-lg bg-red-100 p-3 text-xs text-red-800">
+                  Cuidado: tus gastos fijos superan tus ingresos. Revisa tu presupuesto.
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>
