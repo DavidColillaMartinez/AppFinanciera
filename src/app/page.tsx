@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useTransactions } from "@/features/transactions/hooks/use-transactions";
 import { useCategories } from "@/features/categories/hooks/use-categories";
 import { useAccounts } from "@/features/accounts/hooks/use-accounts";
@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/dialog";
 import { TransactionForm } from "@/features/transactions/components/transaction-form";
 import { DashboardCustomizer } from "@/components/dashboard/dashboard-customizer";
+import { SavingsPanelExpanded } from "@/components/dashboard/savings-panel-expanded";
 import { TransactionType } from "@/constants/enums";
 import { cn } from "@/lib/utils";
 import {
@@ -144,6 +145,7 @@ export default function VistaMesPage() {
   const [showCustomizer, setShowCustomizer] = useState(false);
   const [selectedType, setSelectedType] = useState<TransactionType | null>(null);
   const [salaryAutoAdded, setSalaryAutoAdded] = useState(false);
+  const [savingsExpanded, setSavingsExpanded] = useState(false);
 
   const widgets = dashboardConfig.widgets;
   const isVisible = (id: string) => widgets.find((w) => w.id === id)?.visible ?? true;
@@ -311,7 +313,7 @@ export default function VistaMesPage() {
   }
 
   function handleSavingsClick() {
-    router.push("/savings");
+    setSavingsExpanded(!savingsExpanded);
   }
 
   if (isLoading) return <LoadingState message="Cargando vista del mes..." />;
@@ -321,30 +323,35 @@ export default function VistaMesPage() {
     );
 
   return (
-    <div className="px-4 py-6 space-y-5 pb-32">
-      <div className="flex items-center justify-between">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-bold tracking-tight">
-            {monthName} {year}
-          </h1>
-          <p className="text-sm text-muted-foreground">Vista del mes</p>
+    <div className="px-4 py-6 space-y-6 pb-32">
+      <div className="space-y-1">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-muted-foreground">
+              {new Date().getFullYear()}
+            </p>
+            <h1 className="text-4xl font-bold tracking-tight text-foreground">
+              {monthName}
+            </h1>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="rounded-xl"
+              onClick={() => setShowCustomizer(true)}
+            >
+              <Settings className="h-5 w-5" />
+            </Button>
+            <input
+              type="month"
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              className="rounded-xl border border-input bg-card px-3 py-2 text-sm shadow-sm transition-colors hover:border-primary/50 focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/20"
+            />
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-2"
-            onClick={() => setShowCustomizer(true)}
-          >
-            <Settings className="h-4 w-4" />
-          </Button>
-          <input
-            type="month"
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(e.target.value)}
-            className="rounded-xl border border-input bg-card px-3 py-2 text-sm shadow-sm transition-colors hover:border-primary/50 focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/20"
-          />
-        </div>
+        <p className="text-sm text-muted-foreground">Vista del mes</p>
       </div>
 
       <div className="space-y-3">
@@ -382,9 +389,10 @@ export default function VistaMesPage() {
             value={`+${userSavingsThisMonth.toFixed(2)}`}
             icon={PiggyBank}
             colorClass="text-savings"
-            bgClass="card-savings"
+            bgClass={cn("card-savings", savingsExpanded && "ring-2 ring-savings")}
             delay={200}
             onClick={handleSavingsClick}
+            isActive={savingsExpanded}
           />
           <MetricCard
             title="Total gastos"
@@ -396,6 +404,8 @@ export default function VistaMesPage() {
           />
         </div>
       </div>
+
+      {savingsExpanded && <SavingsPanelExpanded />}
 
       {isVisible("chart") && chartData.length > 0 && (
         <Card className="overflow-hidden animate-fade-in" style={{ animationDelay: "300ms" }}>
