@@ -70,6 +70,7 @@ function MetricCard({
   colorClass,
   bgClass,
   delay,
+  href,
 }: {
   title: string;
   value: string;
@@ -77,10 +78,11 @@ function MetricCard({
   colorClass: string;
   bgClass: string;
   delay: number;
+  href?: string;
 }) {
-  return (
+  const card = (
     <Card
-      className={cn("overflow-hidden animate-fade-in", bgClass)}
+      className={cn("overflow-hidden animate-fade-in cursor-pointer", bgClass, href && "hover:shadow-md transition-shadow")}
       style={{ animationDelay: `${delay}ms` }}
     >
       <CardContent className="p-4">
@@ -105,10 +107,16 @@ function MetricCard({
       </CardContent>
     </Card>
   );
+
+  return href ? (
+    <a href={href} className="block">
+      {card}
+    </a>
+  ) : card;
 }
 
 export default function VistaMesPage() {
-  const { sheetId, dashboardConfig } = useAppStore();
+  const { sheetId, dashboardConfig, monthlyIncome, incomeType } = useAppStore();
   const [selectedMonth, setSelectedMonth] = useState(
     new Date().toISOString().slice(0, 7),
   );
@@ -325,6 +333,7 @@ export default function VistaMesPage() {
               colorClass="text-savings"
               bgClass="card-savings"
               delay={200}
+              href="/savings"
             />
           )}
           {isVisible("balance") && (
@@ -375,9 +384,17 @@ export default function VistaMesPage() {
       {isVisible("savingsPlan") && savingsPlanData && (
         <Card className="overflow-hidden animate-fade-in border-blue-200 bg-blue-50/50" style={{ animationDelay: "320ms" }}>
           <CardContent className="p-4">
-            <h2 className="text-sm font-semibold mb-4 flex items-center gap-2">
-              Plan de ahorro del mes
-            </h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-semibold flex items-center gap-2">
+                <PiggyBank className="h-4 w-4 text-savings" />
+                Plan de ahorro del mes
+              </h2>
+              {monthlyIncome > 0 && (
+                <span className="text-xs px-2 py-1 rounded-full bg-income/20 text-income font-medium">
+                  {incomeType === "fixed" ? "Fija" : "Variable"}
+                </span>
+              )}
+            </div>
             <div className="space-y-3">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Ingresos</span>
@@ -394,6 +411,53 @@ export default function VistaMesPage() {
                   {savingsPlanData.netForMonth >= 0 ? "+" : ""}{savingsPlanData.netForMonth.toFixed(2)}
                 </span>
               </div>
+
+              {monthlyIncome > 0 && (
+                <>
+                  <div className="mt-4 p-3 rounded-lg bg-white/50 border border-blue-100">
+                    <p className="text-xs font-semibold text-blue-800 mb-2 uppercase tracking-wide">
+                      Basado en tu nomina configurada
+                    </p>
+                    <div className="flex justify-between text-sm mb-1">
+                      <span className="text-muted-foreground">Tu nomina</span>
+                      <span className="font-medium">{monthlyIncome.toFixed(2)} €</span>
+                    </div>
+                    <div className="flex justify-between text-sm mb-1">
+                      <span className="text-muted-foreground">Gastos fijos</span>
+                      <span className="font-medium">-{savingsPlanData.totalFixed.toFixed(2)}</span>
+                    </div>
+                    <div className="h-px bg-blue-200 my-2" />
+                    <div className="flex justify-between text-sm font-medium">
+                      <span className="text-blue-800">Neto estimado</span>
+                      <span className="text-blue-800">{(monthlyIncome - savingsPlanData.totalFixed).toFixed(2)} €</span>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-blue-100 pt-3 mt-3">
+                    <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">
+                      Recomendacion por prioridad
+                    </p>
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-red-500" />
+                        <span className="text-xs text-muted-foreground flex-1">Gastos esenciales (ALTA)</span>
+                        <span className="text-xs font-medium text-red-600">Cubiertos</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-yellow-500" />
+                        <span className="text-xs text-muted-foreground flex-1">Gastos importantes (MEDIA)</span>
+                        <span className="text-xs font-medium text-yellow-600">Revisar</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-blue-500" />
+                        <span className="text-xs text-muted-foreground flex-1">Ahorro sugerido (20%)</span>
+                        <span className="text-xs font-medium text-savings">+{savingsPlanData.suggestedSavings.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Sugerencia: 20% ahorro</span>
                 <span className="font-medium text-savings">+{savingsPlanData.suggestedSavings.toFixed(2)}</span>
@@ -406,6 +470,14 @@ export default function VistaMesPage() {
                 <div className="rounded-lg bg-red-100 p-3 text-xs text-red-800">
                   Cuidado: tus gastos fijos superan tus ingresos. Revisa tu presupuesto.
                 </div>
+              )}
+              {monthlyIncome === 0 && (
+                <a
+                  href="/settings/preferencias"
+                  className="block mt-2 text-center text-xs text-blue-600 hover:text-blue-800 hover:underline"
+                >
+                  Configurar nomina para ver plan personalizado →
+                </a>
               )}
             </div>
           </CardContent>

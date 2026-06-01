@@ -19,6 +19,7 @@ import type { CategoryRow } from "@/types/models";
 const categoryTypes = [
   { value: CategoryType.INGRESO, label: "Ingreso" },
   { value: CategoryType.GASTO, label: "Gasto" },
+  { value: CategoryType.AHORRO, label: "Ahorro" },
 ];
 
 interface CategoryFormProps {

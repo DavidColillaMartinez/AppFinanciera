@@ -19,6 +19,7 @@ import {
   useUpdateTransaction,
 } from "../hooks/use-transactions";
 import type { TransactionRow, CategoryRow, AccountRow } from "@/types/models";
+import { useToast } from "@/components/ui/toast";
 
 const transactionTypes = [
   { value: TransactionType.INGRESO, label: "Ingreso" },
@@ -51,6 +52,8 @@ export function TransactionForm({
 }: TransactionFormProps) {
   const isEditing = !!initialData?.id;
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const { success, error: showError } = useToast();
   const createTransaction = useCreateTransaction(sheetId);
   const updateTransaction = useUpdateTransaction(sheetId);
 
@@ -110,6 +113,7 @@ export function TransactionForm({
   ];
 
   async function onSubmit(data: Record<string, unknown>) {
+    setSubmitError(null);
     setIsSubmitting(true);
     try {
       if (isEditing && initialData) {
@@ -118,15 +122,19 @@ export function TransactionForm({
           id: initialData.id,
           tipo: data.tipo as TransactionRow["tipo"],
         } as Parameters<typeof updateTransaction.mutateAsync>[0]);
+        success("Movimiento actualizado correctamente");
       } else {
         await createTransaction.mutateAsync(
           data as unknown as Parameters<typeof createTransaction.mutateAsync>[0],
         );
+        success("Movimiento creado correctamente");
       }
       reset(defaultValues);
       onSuccess?.();
     } catch (e) {
-      console.error("Error saving transaction:", e);
+      const message = e instanceof Error ? e.message : "Error al guardar";
+      setSubmitError(message);
+      showError("Error al guardar el movimiento");
     } finally {
       setIsSubmitting(false);
     }
@@ -140,6 +148,11 @@ export function TransactionForm({
         </CardTitle>
       </CardHeader>
       <CardContent>
+        {submitError && (
+          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+            {submitError}
+          </div>
+        )}
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">

@@ -5,7 +5,7 @@ export const categorySchema = z.object({
   categoriaId: z.string().min(1),
   nombre: z.string().min(1).max(100),
   presupuestoMensual: z.number().min(0),
-  tipoHabitual: z.enum([CategoryType.INGRESO, CategoryType.GASTO]),
+  tipoHabitual: z.enum([CategoryType.INGRESO, CategoryType.GASTO, CategoryType.AHORRO]),
   activo: z.enum(["S", "N"]),
   grupo: z.string().max(100).optional(),
   color: z.string().regex(/^#[0-9A-Fa-f]{6}$/, "Color hex valido"),

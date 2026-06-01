@@ -11,6 +11,7 @@ export type TransactionType =
 export const CategoryType = {
   INGRESO: "Ingreso",
   GASTO: "Gasto",
+  AHORRO: "Ahorro",
 } as const;
 
 export type CategoryType = (typeof CategoryType)[keyof typeof CategoryType];
