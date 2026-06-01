@@ -1,7 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
-
 let GOOGLE_CLIENT_ID: string;
 let GOOGLE_REDIRECT_URI: string;
 
@@ -32,6 +30,7 @@ export function getGoogleAuthUrl(): string {
     response_type: "token",
     scope: GOOGLE_SCOPES,
     include_granted_scopes: "true",
+    prompt: "consent",
     state,
   });
 

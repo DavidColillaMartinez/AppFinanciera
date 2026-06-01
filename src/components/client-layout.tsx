@@ -2,19 +2,16 @@
 
 import { ThemeProvider } from "@/components/theme-provider";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/stores/app-store";
-import { hasToken, getToken } from "@/lib/sheets/client";
 import { BottomNav } from "@/components/bottom-nav";
 import { Button } from "@/components/ui/button";
 
-function GoogleReconnectPrompt({ onReconnected }: { onReconnected?: () => void }) {
-  const router = useRouter();
-
+function GoogleReconnectPrompt() {
   function handleReconnect() {
-    router.push("/auth/google");
+    window.location.href = "/auth/google";
   }
 
   return (
@@ -78,17 +75,11 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
   );
 
   const { isConnected, hasSeenOnboarding } = useAppStore();
-  const [hasGoogleToken, setHasGoogleToken] = useState(false);
   const [mounted, setMounted] = useState(false);
-
-  const checkToken = useCallback(() => {
-    setHasGoogleToken(hasToken());
-  }, []);
 
   useEffect(() => {
     setMounted(true);
-    checkToken();
-  }, [checkToken]);
+  }, []);
 
   useEffect(() => {
     if (!mounted) return;
@@ -102,33 +93,9 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     }
   }, [mounted, hasSeenOnboarding, isConnected, pathname, router]);
 
-  useEffect(() => {
-    if (!mounted || !isConnected) return;
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === "google_access_token") {
-        checkToken();
-        if (hasToken()) {
-          window.location.reload();
-        }
-      }
-    };
-
-    window.addEventListener("storage", handleStorageChange);
-    const interval = setInterval(checkToken, 2000);
-
-    return () => {
-      window.removeEventListener("storage", handleStorageChange);
-      clearInterval(interval);
-    };
-  }, [mounted, isConnected, checkToken, router]);
-
   if (!mounted) {
     return null;
   }
-
-  const showReconnectPrompt =
-    mounted && hasSeenOnboarding && isConnected && !hasGoogleToken;
-  const showNoConnection = mounted && !isConnected;
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -138,14 +105,19 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
         enableSystem
         disableTransitionOnChange
       >
-        {showReconnectPrompt ? (
-          <GoogleReconnectPrompt onReconnected={checkToken} />
-        ) : (
+        {!hasSeenOnboarding || !isConnected ? (
           <>
             <div className={cn("min-h-dvh bg-background text-foreground")}>
               {children}
             </div>
             {isConnected && <BottomNav />}
+          </>
+        ) : (
+          <>
+            <div className={cn("min-h-dvh bg-background text-foreground")}>
+              {children}
+            </div>
+            <BottomNav />
           </>
         )}
       </ThemeProvider>

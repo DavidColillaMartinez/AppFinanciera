@@ -9,7 +9,7 @@ export default function GoogleAuthPage() {
   useEffect(() => {
     try {
       const url = getGoogleAuthUrl();
-      window.location.href = url;
+      window.location.replace(url);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "OAuth no configurado",

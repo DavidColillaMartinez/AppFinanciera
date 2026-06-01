@@ -15,36 +15,39 @@ import {
   Palette,
   HelpCircle,
   Activity,
+  LogOut,
 } from "lucide-react";
 
 export default function MorePage() {
   const { sheetId, sheetUrl, isConnected, disconnect } = useAppStore();
   const router = useRouter();
 
-  function handleReconnect() {
-    clearToken();
-    router.push("/auth/google");
-  }
-
   function handleChangeSheet() {
     disconnect();
-    router.push("/onboarding");
+    window.location.href = "/onboarding?step=sheet";
   }
 
-  function handleDisconnect() {
-    if (confirm("¿Desconectar la Sheet? Tendrás que volver a conectarla.")) {
+  function handleDisconnectSheet() {
+    if (confirm("¿Desconectar la Sheet? La sesion de Google se mantiene.")) {
+      disconnect();
+      window.location.href = "/onboarding?step=sheet";
+    }
+  }
+
+  function handleDisconnectGoogle() {
+    if (confirm("¿Cerrar sesion de Google? Tendras que volver a iniciar sesion.")) {
       clearToken();
       disconnect();
-      router.push("/onboarding");
+      window.location.href = "/onboarding";
     }
   }
 
   return (
     <div className="px-4 py-6 space-y-4 pb-24">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Más</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Mas</h1>
         <p className="text-sm text-muted-foreground">
-          Configuración y herramientas adicionales
+          Configuracion y herramientas adicionales
         </p>
       </div>
 
@@ -59,7 +62,7 @@ export default function MorePage() {
                 <div>
                   <p className="font-medium text-sm">Ajustes</p>
                   <p className="text-xs text-muted-foreground">
-                    Preferencias y configuración
+                    Preferencias y configuracion
                   </p>
                 </div>
               </div>
@@ -76,9 +79,9 @@ export default function MorePage() {
                   <Tag className="h-5 w-5 text-primary" />
                 </div>
                 <div>
-                  <p className="font-medium text-sm">Categorías</p>
+                  <p className="font-medium text-sm">Categorias</p>
                   <p className="text-xs text-muted-foreground">
-                    Gestionar categorías y presupuestos
+                    Gestionar categorias y presupuestos
                   </p>
                 </div>
               </div>
@@ -90,67 +93,67 @@ export default function MorePage() {
 
       <div className="space-y-2">
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide px-1">
-          Conexión
+          Conexion
         </h2>
 
         {isConnected && sheetId && (
           <Card className="overflow-hidden">
-            <CardContent className="p-4">
-              <div className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <div className="rounded-lg bg-income/10 p-2.5">
-                    <FileSpreadsheet className="h-5 w-5 text-income" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm">Sheet conectada</p>
-                    <p className="text-xs text-muted-foreground truncate">
-                      {sheetId}
-                    </p>
-                  </div>
+            <CardContent className="p-4 space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="rounded-lg bg-income/10 p-2.5">
+                  <FileSpreadsheet className="h-5 w-5 text-income" />
                 </div>
-                {sheetUrl && (
-                  <a
-                    href={sheetUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block"
-                  >
-                    <Button variant="outline" size="sm" className="w-full gap-2">
-                      <Link className="h-4 w-4" />
-                      Abrir en Google Sheets
-                    </Button>
-                  </a>
-                )}
-                <div className="grid grid-cols-2 gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-2"
-                    onClick={handleReconnect}
-                  >
-                    <RefreshCw className="h-4 w-4" />
-                    Reconectar
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-2"
-                    onClick={handleChangeSheet}
-                  >
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-sm">Sheet conectada</p>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {sheetId}
+                  </p>
+                </div>
+              </div>
+              {sheetUrl && (
+                <a
+                  href={sheetUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block"
+                >
+                  <Button variant="outline" size="sm" className="w-full gap-2">
                     <Link className="h-4 w-4" />
-                    Cambiar
+                    Abrir en Google Sheets
                   </Button>
-                </div>
+                </a>
+              )}
+
+              <div className="grid grid-cols-2 gap-2">
                 <Button
-                  variant="destructive"
+                  variant="outline"
                   size="sm"
-                  className="w-full gap-2"
-                  onClick={handleDisconnect}
+                  className="gap-2"
+                  onClick={handleChangeSheet}
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  Cambiar Sheet
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                  onClick={handleDisconnectSheet}
                 >
                   <Unlink className="h-4 w-4" />
-                  Desconectar Sheet
+                  Desconectar
                 </Button>
               </div>
+
+              <Button
+                variant="destructive"
+                size="sm"
+                className="w-full gap-2"
+                onClick={handleDisconnectGoogle}
+              >
+                <LogOut className="h-4 w-4" />
+                Cerrar sesion de Google
+              </Button>
             </CardContent>
           </Card>
         )}
@@ -163,7 +166,7 @@ export default function MorePage() {
                   <Unlink className="h-5 w-5 text-expense" />
                 </div>
                 <div className="flex-1">
-                  <p className="font-medium text-sm">Sin conexión</p>
+                  <p className="font-medium text-sm">Sin conexion</p>
                   <p className="text-xs text-muted-foreground">
                     Conecta tu Google Sheet
                   </p>
@@ -171,7 +174,9 @@ export default function MorePage() {
               </div>
               <Button
                 className="w-full mt-3 gap-2"
-                onClick={() => router.push("/onboarding")}
+                onClick={() => {
+                  window.location.href = "/onboarding";
+                }}
               >
                 <Link className="h-4 w-4" />
                 Conectar Sheet
@@ -213,7 +218,7 @@ export default function MorePage() {
                   <Activity className="h-5 w-5 text-primary" />
                 </div>
                 <div>
-                  <p className="font-medium text-sm">Diagnóstico Sheet</p>
+                  <p className="font-medium text-sm">Diagnostico Sheet</p>
                   <p className="text-xs text-muted-foreground">
                     Verificar estructura de la plantilla
                   </p>
@@ -233,7 +238,7 @@ export default function MorePage() {
               <div>
                 <p className="font-medium text-sm">Ayuda</p>
                 <p className="text-xs text-muted-foreground">
-                  Documentación y soporte
+                  Documentacion y soporte
                 </p>
               </div>
             </div>

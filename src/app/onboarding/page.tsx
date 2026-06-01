@@ -45,15 +45,18 @@ function OnboardingContent() {
   const canUseGoogleOAuth = isGoogleAuthConfigured();
 
   useEffect(() => {
+    const token = getToken();
     if (isConnected && sheetId) {
       setStep("done");
-    } else if (stepParam === "sheet") {
+    } else if (stepParam === "sheet" && token) {
       setStep("sheet");
+    } else if (stepParam === "sheet" && !token) {
+      setStep("google");
     }
   }, [isConnected, sheetId, stepParam]);
 
   function handleGoogleAuth() {
-    router.push("/auth/google");
+    window.location.href = "/auth/google";
   }
 
   async function handleSheetConnect() {

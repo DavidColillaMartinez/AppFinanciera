@@ -1,12 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { getAccessTokenFromUrl, clearHash } from "@/lib/google/auth";
 import { useAppStore } from "@/stores/app-store";
+import { hasToken } from "@/lib/sheets/client";
 
 export default function AuthCallbackPage() {
-  const router = useRouter();
   const { setOnboardingSeen, isConnected } = useAppStore();
   const [error, setError] = useState<string | null>(null);
 
@@ -25,15 +24,15 @@ export default function AuthCallbackPage() {
       setOnboardingSeen();
 
       if (isConnected) {
-        router.replace("/");
+        window.location.replace("/");
       } else {
-        router.replace("/onboarding?step=sheet");
+        window.location.replace("/onboarding?step=sheet");
       }
     } else {
       clearHash();
       setError("Token de acceso invalido o expirado.");
     }
-  }, [router, setOnboardingSeen, isConnected]);
+  }, [setOnboardingSeen, isConnected]);
 
   if (error) {
     return (
