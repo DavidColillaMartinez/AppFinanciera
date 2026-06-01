@@ -9,7 +9,6 @@ import {
 } from "@/schemas/transaction";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TransactionType } from "@/constants/enums";
@@ -21,6 +20,8 @@ import {
 } from "../hooks/use-transactions";
 import type { TransactionRow, CategoryRow, AccountRow } from "@/types/models";
 import { useToast } from "@/components/ui/toast";
+import { FormField } from "@/components/forms/form-field";
+import { cn } from "@/lib/utils";
 
 const transactionTypes = [
   { value: TransactionType.INGRESO, label: "Ingreso" },
@@ -142,137 +143,115 @@ export function TransactionForm({
   }
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className="border-0 shadow-none">
+      <CardHeader className="px-0 pb-4">
         <CardTitle className="text-base">
           {isEditing ? "Editar movimiento" : "Nuevo movimiento"}
         </CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="px-0">
         {submitError && (
           <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
             {submitError}
           </div>
         )}
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label htmlFor="fecha">Fecha</Label>
-              <Input id="fecha" type="date" {...register("fecha")} />
-              {errors.fecha && (
-                <p className="text-xs text-destructive">
-                  {errors.fecha.message}
-                </p>
-              )}
-            </div>
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+          <div className="grid grid-cols-2 gap-4">
+            <FormField label="Fecha" htmlFor="fecha" error={errors.fecha}>
+              <Input id="fecha" type="date" className="h-11" {...register("fecha")} />
+            </FormField>
 
-            <div className="space-y-2">
-              <Label htmlFor="tipo">Tipo</Label>
+            <FormField label="Tipo" htmlFor="tipo" error={errors.tipo}>
               <Select
                 id="tipo"
                 options={transactionTypes}
                 value={watch("tipo") ?? TransactionType.GASTO}
                 onChange={(e) => setValue("tipo", e.target.value as TransactionType)}
+                className="h-11"
               />
-              {errors.tipo && (
-                <p className="text-xs text-destructive">
-                  {errors.tipo.message}
-                </p>
-              )}
-            </div>
+            </FormField>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="concepto">Concepto</Label>
+          <FormField label="Concepto" htmlFor="concepto" error={errors.concepto} required>
             <Input
               id="concepto"
               placeholder="Descripcion del movimiento"
+              className="h-11"
               {...register("concepto")}
             />
-            {errors.concepto && (
-              <p className="text-xs text-destructive">
-                {errors.concepto.message}
-              </p>
-            )}
-          </div>
+          </FormField>
 
-          <div className="space-y-2">
-            <Label htmlFor="categoria">Categoria</Label>
+          <FormField label="Categoria" htmlFor="categoria" error={errors.categoria} required>
             <Select
               id="categoria"
               options={categoryOptions}
               value={watch("categoria") ?? ""}
               onChange={(e) => setValue("categoria", e.target.value)}
+              className="h-11"
             />
-            {errors.categoria && (
-              <p className="text-xs text-destructive">
-                {errors.categoria.message}
-              </p>
-            )}
-          </div>
+          </FormField>
 
-          <div className="space-y-2">
-            <Label htmlFor="importe">Importe (€)</Label>
+          <FormField label="Importe (€)" htmlFor="importe" error={errors.importe} required>
             <Input
               id="importe"
               type="number"
               step="0.01"
               min="0"
               placeholder="0.00"
+              className="h-11"
               {...register("importe", { valueAsNumber: true })}
             />
-            {errors.importe && (
-              <p className="text-xs text-destructive">
-                {errors.importe.message}
-              </p>
-            )}
-          </div>
+          </FormField>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className={cn("grid gap-4", showPaymentMethod || showCuentaOrigen ? "grid-cols-2" : "grid-cols-1")}>
             {showPaymentMethod && (
-              <div className="space-y-2">
-                <Label htmlFor="metodo">Metodo de pago</Label>
+              <FormField label="Metodo de pago" htmlFor="metodo" error={errors.metodo}>
                 <Select
                   id="metodo"
                   options={PAYMENT_METHOD_OPTIONS}
                   value={watch("metodo") ?? ""}
                   onChange={(e) => setValue("metodo", e.target.value)}
+                  className="h-11"
                 />
-              </div>
+              </FormField>
             )}
 
             {showCuentaOrigen && (
-              <div className="space-y-2">
-                <Label htmlFor="cuentaOrigen">Cuenta origen</Label>
+              <FormField label="Cuenta origen" htmlFor="cuentaOrigen" error={errors.cuentaOrigen}>
                 <Select
                   id="cuentaOrigen"
                   options={accountOptions}
                   value={watch("cuentaOrigen") ?? ""}
                   onChange={(e) => setValue("cuentaOrigen", e.target.value)}
+                  className="h-11"
                 />
-              </div>
+              </FormField>
             )}
           </div>
 
           {showCuentaDestino && (
-            <div className="space-y-2">
-              <Label htmlFor="cuentaDestino">Cuenta destino</Label>
+            <FormField label="Cuenta destino" htmlFor="cuentaDestino" error={errors.cuentaDestino}>
               <Select
                 id="cuentaDestino"
                 options={accountOptions}
                 value={watch("cuentaDestino") ?? ""}
                 onChange={(e) => setValue("cuentaDestino", e.target.value)}
+                className="h-11"
               />
-            </div>
+            </FormField>
           )}
 
-          <div className="space-y-2">
-            <Label htmlFor="notas">Notas</Label>
-            <Input id="notas" placeholder="Opcional" {...register("notas")} />
-          </div>
+          <FormField label="Notas" htmlFor="notas" error={errors.notas}>
+            <Input
+              id="notas"
+              placeholder="Opcional"
+              className="h-11"
+              {...register("notas")}
+            />
+          </FormField>
 
-          <div className="flex gap-3 pt-2">
-            <Button type="submit" className="flex-1" disabled={isSubmitting}>
+          <div className="flex gap-3 pt-2 sticky bottom-0 bg-background border-t pt-4 -mx-4 px-4">
+            <Button type="submit" className="flex-1 h-11" disabled={isSubmitting}>
               {isSubmitting
                 ? "Guardando..."
                 : isEditing
@@ -280,7 +259,7 @@ export function TransactionForm({
                   : "Guardar"}
             </Button>
             {onCancel && (
-              <Button type="button" variant="outline" onClick={onCancel}>
+              <Button type="button" variant="outline" onClick={onCancel} className="h-11">
                 Cancelar
               </Button>
             )}
