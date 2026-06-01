@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TransactionType } from "@/constants/enums";
+import { PAYMENT_METHOD_OPTIONS, PaymentMethod } from "@/constants/payment-methods";
 import { useState } from "react";
 import {
   useCreateTransaction,
@@ -25,10 +26,7 @@ const transactionTypes = [
   { value: TransactionType.INGRESO, label: "Ingreso" },
   { value: TransactionType.GASTO, label: "Gasto" },
   { value: TransactionType.AHORRO, label: "Ahorro" },
-  {
-    value: TransactionType.TRANSFERENCIA_INTERNA,
-    label: "Transferencia interna",
-  },
+  { value: TransactionType.TRANSFERENCIA_INTERNA, label: "Transferencia" },
 ];
 
 interface TransactionFormProps {
@@ -64,7 +62,7 @@ export function TransactionForm({
         tipo: initialData.tipo,
         categoria: initialData.categoria,
         importe: initialData.importe,
-        metodo: initialData.metodo,
+        metodo: initialData.metodo || "",
         cuentaOrigen: initialData.cuentaOrigen,
         cuentaDestino: initialData.cuentaDestino,
         notas: initialData.notas,
@@ -98,6 +96,9 @@ export function TransactionForm({
   });
 
   const selectedType = watch("tipo");
+  const showPaymentMethod = selectedType !== TransactionType.INGRESO;
+  const showCuentaOrigen = selectedType !== TransactionType.INGRESO;
+  const showCuentaDestino = selectedType === TransactionType.TRANSFERENCIA_INTERNA;
 
   const categoryOptions = [
     { value: "", label: "Sin categoria" },
@@ -170,7 +171,8 @@ export function TransactionForm({
               <Select
                 id="tipo"
                 options={transactionTypes}
-                {...register("tipo")}
+                value={watch("tipo") ?? TransactionType.GASTO}
+                onChange={(e) => setValue("tipo", e.target.value as TransactionType)}
               />
               {errors.tipo && (
                 <p className="text-xs text-destructive">
@@ -210,7 +212,7 @@ export function TransactionForm({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="importe">Importe</Label>
+            <Label htmlFor="importe">Importe (€)</Label>
             <Input
               id="importe"
               type="number"
@@ -227,18 +229,19 @@ export function TransactionForm({
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label htmlFor="metodo">Metodo de pago</Label>
-              <Input
-                id="metodo"
-                placeholder="Opcional"
-                {...register("metodo")}
-              />
-            </div>
+            {showPaymentMethod && (
+              <div className="space-y-2">
+                <Label htmlFor="metodo">Metodo de pago</Label>
+                <Select
+                  id="metodo"
+                  options={PAYMENT_METHOD_OPTIONS}
+                  value={watch("metodo") ?? ""}
+                  onChange={(e) => setValue("metodo", e.target.value)}
+                />
+              </div>
+            )}
 
-            {(selectedType === "Gasto" ||
-              selectedType === "Ahorro" ||
-              selectedType === "Transferencia interna") && (
+            {showCuentaOrigen && (
               <div className="space-y-2">
                 <Label htmlFor="cuentaOrigen">Cuenta origen</Label>
                 <Select
@@ -251,8 +254,7 @@ export function TransactionForm({
             )}
           </div>
 
-          {(selectedType === "Ingreso" ||
-            selectedType === "Transferencia interna") && (
+          {showCuentaDestino && (
             <div className="space-y-2">
               <Label htmlFor="cuentaDestino">Cuenta destino</Label>
               <Select
