@@ -20,7 +20,7 @@ const reserveMovementSchema = z.object({
   tipoMovimiento: z.enum([
     TipoMovimientoReserva.APORTE,
     TipoMovimientoReserva.RETIRADA,
-  ]),
+  ] as const),
   importe: z.number().min(0.01, "El importe debe ser positivo"),
   cuentaOrigen: z.string().optional(),
   cuentaDestino: z.string().optional(),
@@ -71,7 +71,10 @@ export function ReserveMovementForm({
     resolver: zodResolver(reserveMovementSchema),
     defaultValues: initialData
       ? {
-          tipoMovimiento: initialData.tipoMovimiento,
+          tipoMovimiento:
+            initialData.tipoMovimiento === TipoMovimientoReserva.RETIRADA
+              ? TipoMovimientoReserva.RETIRADA
+              : TipoMovimientoReserva.APORTE,
           importe: initialData.importe,
           cuentaOrigen: initialData.cuentaOrigen,
           cuentaDestino: initialData.cuentaDestino,

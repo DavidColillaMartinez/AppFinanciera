@@ -221,8 +221,10 @@ not be mixed with normal spending.
   `createdAt`, `updatedAt`.
 - `tipoDestino` ∈ `reserva | objetivo | pago_futuro`.
 - `tipoMovimiento` ∈ `aporte | retirada`.
-- Soft-deletes use `tipoMovimiento = "Eliminado"`. The engine ignores
-  soft-deleted rows.
+- Soft-deletes use `tipoMovimiento = "Eliminado"` (sentinel). The engine
+  detects the sentinel **before** normalizing into `aporte | retirada`, so
+  soft-deleted rows are never counted as active savings. The normalization
+  step is the only place that owns the mapping.
 - The engine prefers the ledger and falls back to the manual `saldoActual` /
   `saldoReservado` field for backward compatibility.
 
@@ -293,9 +295,16 @@ available = income
           − plannedSavings
 ```
 
-- `plannedSavings = max(0, (income − variableExpenses − fixedConfirmed
-  − fixedPending − deferred) × 0.2)`. The 20% rate is a placeholder; a
-  user-configurable savings goal will replace it in a later phase.
+- `plannedSavings` is the user's real monthly plan: the sum of
+  `Reservas.aporteMensualSugerido + Objetivos.aporteMensual` from active
+  rows. `Pagos_futuros.aporteMensual` is **not** included here because it is
+  already represented by `futurePaymentProvisions`. This avoids double
+  counting the same target.
+- If the user has no active reserves/goals with a monthly plan, the engine
+  falls back to a 20% recommendation of `(income − variable − fixedConfirmed
+  − fixedPending − deferred)`. The breakdown flags
+  `plannedSavingsIsFallback: true` so the UI can label it as "Ahorro
+  recomendado (20% fallback)" instead of "Ahorro planificado".
 - The `Disponible` card must be clickable and reveal the breakdown behind the
   number (`explainAvailableBalance`).
 - Pending fixed obligations are still part of the formula (the user must know
@@ -350,17 +359,33 @@ The dashboard consumes the engine via `useFinanceSummary({ monthKey })`. It does
 - The page is wrapped in `<Suspense>` because `useSearchParams` requires it
   in Next.js 16.
 
-## 10. Forms and movements
+## 10. Forms and movements (implemented Phase 9)
 
-- `Ingreso` requires `cuentaDestino`. No `metodo`.
-- `Gasto` requires `cuentaOrigen` and `metodo` from the fixed selector.
-- `Transferencia interna` requires `cuentaOrigen` and `cuentaDestino`.
-- `Ahorro` requires a destination reserve / goal / future payment (general fallback
-  allowed). Phase 9 enforces this at the Zod level.
-- Payment method is a fixed selector: `Tarjeta / Efectivo / Bizum / Transferencia
-  / Domiciliación / Otro`. (To be confirmed or narrowed in Phase 9.)
-- `/transactions?filterType=Ingreso|Gasto` must apply the filter at the hook
-  level. (Phase 9.)
+- `Ingreso` requires `cuentaDestino`. No `metodo` is shown or saved (the
+  column is left empty). `metodo` is auto-cleared when the user switches to
+  the income type.
+- `Gasto` requires `cuentaOrigen`, `metodo` (selector) and a category
+  compatible with `tipoHabitual = Gasto`.
+- `Transferencia interna` requires `cuentaOrigen` and `cuentaDestino` and
+  rejects same-account transfers. `metodo` is auto-set to `Transferencia`.
+- `Ahorro` is **not** a valid type in the form. If a caller passes
+  `defaultType = "Ahorro"`, the form opens a banner that points to
+  `/savings/monthly`. The dashboard FAB and the `/transactions` page
+  redirect "Ahorro" to `/savings/monthly` directly. Generic `Ahorro`
+  movements are kept for legacy/audit but are excluded from
+  `getMonthlySavings` via the `LEDGER-` id guard.
+- Categories are filtered by `tipoHabitual` so an income form only shows
+  income categories and an expense form only shows expense categories.
+- Accounts are loaded from the sheet (`useAccounts`). If the list is empty,
+  the form shows an inline empty state with a link to `/accounts`.
+- Payment method is a fixed selector: `Tarjeta / Efectivo / Bizum /
+  Transferencia / Domiciliación / Otro`. `normalizePaymentMethod` in
+  `src/constants/payment-methods.ts` maps old/informal values to the
+  canonical label (case-insensitive) and falls back to `Otro` only for
+  truly unknown values. The hook writes the normalized value.
+- `/transactions?filterType=Ingreso|Gasto|Ahorro|Transferencia%20interna&month=YYYY-MM`
+  applies the filter via `useSearchParams`. A banner shows active filters
+  with a "Limpiar" action that strips the query params.
 
 ## 11. Google session and Sheet connection
 
@@ -420,7 +445,8 @@ required structure is present. Visual formatting is irrelevant.
 - Phase 6 — fixed expenses monthly confirmation — **implemented**.
 - Phase 7 — `Mov_reservas` savings ledger — **implemented**.
 - Phase 8 — dashboard metrics using the engine — **implemented**.
-- Phase 9 — forms and movement flows — pending.
+- Phase 8.5 — critical post-dashboard fixes — **implemented**.
+- Phase 9 — forms and movement flows — **implemented**.
 - Phase 10 — Google session and Sheet connection recovery — pending.
 - Phase 11 — UI / design polish — pending.
 
@@ -428,4 +454,4 @@ Full phase details, files touched and conventions: `docs/FINANCE_IMPLEMENTATION.
 
 ## 15. Next phase pointer
 
-**Phase 9 — Forms and movement flows.**
+**Phase 10 — Google session and Sheet connection recovery.**

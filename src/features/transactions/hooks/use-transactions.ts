@@ -10,6 +10,8 @@ import {
 } from "@/lib/sheets/writer";
 import type { TransactionRow } from "@/types/models";
 import { generateMonthKey, nowISO } from "@/lib/sheets/adapters";
+import { normalizePaymentMethod } from "@/constants/payment-methods";
+import { TransactionType } from "@/constants/enums";
 
 function rowToTransaction(row: Record<string, string>): TransactionRow {
   return {
@@ -20,7 +22,7 @@ function rowToTransaction(row: Record<string, string>): TransactionRow {
     tipo: (row.tipo as TransactionRow["tipo"]) ?? "Gasto",
     categoria: row.categoria ?? "",
     importe: Number(row.importe) || 0,
-    metodo: row.metodo ?? "",
+    metodo: normalizePaymentMethod(row.metodo ?? ""),
     cuentaOrigen: row.cuentaOrigen ?? "",
     cuentaDestino: row.cuentaDestino ?? "",
     notas: row.notas ?? "",
@@ -74,6 +76,10 @@ export function useCreateTransaction(sheetId: string | null) {
       const now = nowISO();
       const monthKey = generateMonthKey(data.fecha);
       const id = `TX-${Date.now()}`;
+      const metodo =
+        data.tipo === TransactionType.INGRESO
+          ? ""
+          : normalizePaymentMethod(data.metodo ?? "");
 
       const rowData = {
         id,
@@ -83,7 +89,7 @@ export function useCreateTransaction(sheetId: string | null) {
         tipo: data.tipo as TransactionRow["tipo"],
         categoria: data.categoria,
         importe: data.importe,
-        metodo: data.metodo ?? "",
+        metodo,
         cuentaOrigen: data.cuentaOrigen ?? "",
         cuentaDestino: data.cuentaDestino ?? "",
         notas: data.notas ?? "",
@@ -141,6 +147,10 @@ export function useUpdateTransaction(sheetId: string | null) {
 
       const now = nowISO();
       const monthKey = generateMonthKey(data.fecha);
+      const metodo =
+        data.tipo === TransactionType.INGRESO
+          ? ""
+          : normalizePaymentMethod(data.metodo ?? "");
 
       const updates: Record<string, string | number | boolean> = {
         fecha: data.fecha,
@@ -149,7 +159,7 @@ export function useUpdateTransaction(sheetId: string | null) {
         tipo: data.tipo as TransactionRow["tipo"],
         categoria: data.categoria,
         importe: data.importe,
-        metodo: data.metodo ?? "",
+        metodo,
         cuentaOrigen: data.cuentaOrigen ?? "",
         cuentaDestino: data.cuentaDestino ?? "",
         notas: data.notas ?? "",
@@ -167,6 +177,10 @@ export function useUpdateTransaction(sheetId: string | null) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["savingsLedger"] });
+      queryClient.invalidateQueries({ queryKey: ["reserves"] });
+      queryClient.invalidateQueries({ queryKey: ["goals"] });
+      queryClient.invalidateQueries({ queryKey: ["futurePayments"] });
     },
   });
 }
@@ -193,6 +207,10 @@ export function useDeleteTransaction(sheetId: string | null) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["savingsLedger"] });
+      queryClient.invalidateQueries({ queryKey: ["reserves"] });
+      queryClient.invalidateQueries({ queryKey: ["goals"] });
+      queryClient.invalidateQueries({ queryKey: ["futurePayments"] });
     },
   });
 }

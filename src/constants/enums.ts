@@ -92,6 +92,7 @@ export type TipoDestinoReserva =
 export const TipoMovimientoReserva = {
   APORTE: "aporte",
   RETIRADA: "retirada",
+  ELIMINADO: "Eliminado",
 } as const;
 
 export type TipoMovimientoReserva =

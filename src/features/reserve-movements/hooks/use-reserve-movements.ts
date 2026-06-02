@@ -4,7 +4,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { SHEET_NAMES, MOV_RESERVAS_HEADERS } from "@/constants/sheet-structure";
 import { readSheetData } from "@/lib/sheets/reader";
 import { rowToReserveMovement } from "@/lib/finance/savings-ledger";
-import { useCreateSavingsContribution as useCreateSavingsContributionCore } from "@/features/savings/hooks/use-savings";
+import {
+  useCreateSavingsContribution as useCreateSavingsContributionCore,
+  useCreateSavingsWithdrawal as useCreateSavingsWithdrawalCore,
+} from "@/features/savings/hooks/use-savings";
+import { TipoMovimientoReserva } from "@/constants/enums";
 import type { ReserveMovementRow } from "@/types/models";
 
 export {
@@ -61,6 +65,7 @@ export function useReserveMovements(
 export function useCreateReserveMovement(sheetId: string | null) {
   const queryClient = useQueryClient();
   const core = useCreateSavingsContributionCore(sheetId);
+  const withdrawal = useCreateSavingsWithdrawalCore(sheetId);
   return useMutation({
     mutationFn: async (data: {
       reservaId: string;
@@ -69,7 +74,21 @@ export function useCreateReserveMovement(sheetId: string | null) {
       cuentaOrigen?: string;
       cuentaDestino?: string;
       notas?: string;
+      fecha?: string;
     }) => {
+      const isWithdrawal = data.tipoMovimiento === TipoMovimientoReserva.RETIRADA;
+      if (isWithdrawal) {
+        return withdrawal.mutateAsync({
+          tipoDestino: "reserva",
+          destinoId: data.reservaId,
+          reservaId: data.reservaId,
+          importe: data.importe,
+          cuentaOrigen: data.cuentaOrigen,
+          cuentaDestino: data.cuentaDestino,
+          notas: data.notas,
+          fecha: data.fecha,
+        });
+      }
       return core.mutateAsync({
         tipoDestino: "reserva",
         destinoId: data.reservaId,
@@ -78,11 +97,17 @@ export function useCreateReserveMovement(sheetId: string | null) {
         cuentaOrigen: data.cuentaOrigen,
         cuentaDestino: data.cuentaDestino,
         notas: data.notas,
+        fecha: data.fecha,
       });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["reserveMovements"] });
       queryClient.invalidateQueries({ queryKey: ["reserves"] });
+      queryClient.invalidateQueries({ queryKey: ["savingsLedger"] });
+      queryClient.invalidateQueries({ queryKey: ["goals"] });
+      queryClient.invalidateQueries({ queryKey: ["futurePayments"] });
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["financeSummary"] });
     },
   });
 }

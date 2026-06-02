@@ -77,8 +77,15 @@ export interface UnconfirmMonthlyPlannedSavingResult {
 export function normalizeTipoMovimiento(
   raw: string,
 ): ReserveMovementRow["tipoMovimiento"] {
-  const value = String(raw ?? "").trim().toLowerCase();
-  if (value === "retirada" || value === "disposicion") {
+  const value = String(raw ?? "").trim();
+  if (
+    value === DELETED_SENTINEL ||
+    value.toLowerCase() === DELETED_SENTINEL.toLowerCase()
+  ) {
+    return DELETED_SENTINEL as ReserveMovementRow["tipoMovimiento"];
+  }
+  const lower = value.toLowerCase();
+  if (lower === "retirada" || lower === "disposicion") {
     return TipoMovimientoReserva.RETIRADA;
   }
   return TipoMovimientoReserva.APORTE;
@@ -121,7 +128,7 @@ export function rowToReserveMovement(
 }
 
 export function isDeletedMovement(m: ReserveMovementRow): boolean {
-  if (m.tipoMovimiento === (DELETED_SENTINEL as unknown as ReserveMovementRow["tipoMovimiento"])) {
+  if (m.tipoMovimiento === (DELETED_SENTINEL as ReserveMovementRow["tipoMovimiento"])) {
     return true;
   }
   return (m.notas ?? "").includes(`[${DELETED_SENTINEL}]`);
@@ -513,7 +520,7 @@ export async function unconfirmMonthlyPlannedSaving(args: {
     SHEET_NAMES.MOV_RESERVAS,
     existingRow,
     {
-      tipoMovimiento: DELETED_SENTINEL,
+      tipoMovimiento: DELETED_SENTINEL as TipoMovimientoReservaType,
       updatedAt: nowISO(),
     },
     token,
@@ -578,6 +585,6 @@ export async function softDeleteReserveMovement(args: {
   await updateReserveMovement({
     sheetId: args.sheetId,
     id: args.id,
-    tipoMovimiento: DELETED_SENTINEL as unknown as TipoMovimientoReservaType,
+    tipoMovimiento: DELETED_SENTINEL as TipoMovimientoReservaType,
   });
 }

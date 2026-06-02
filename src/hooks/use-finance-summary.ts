@@ -10,7 +10,7 @@ import { useFuturePayments } from "@/features/future-payments/hooks/use-future-p
 import { useDeferredPayments } from "@/features/deferred-payments/hooks/use-deferred-payments";
 import { useReserves } from "@/features/reserves/hooks/use-reserves";
 import { useGoals } from "@/features/goals/hooks/use-goals";
-import { useReserveMovements } from "@/features/reserve-movements/hooks/use-reserve-movements";
+import { useAllReserveMovements } from "@/features/savings/hooks/use-savings";
 import { useSalaryConfig } from "@/features/salary/hooks/use-salary";
 import { useConfirmedFixedExpenseIds } from "@/features/fixed-expenses/hooks/use-fixed-confirmation";
 import {
@@ -48,7 +48,7 @@ export function useFinanceSummary(
   const { data: deferredPayments, isLoading: lD } = useDeferredPayments(sheetId);
   const { data: reserves, isLoading: lR } = useReserves(sheetId);
   const { data: goals, isLoading: lG } = useGoals(sheetId);
-  const { data: reserveMovements, isLoading: lRM } = useReserveMovements(sheetId);
+  const { data: reserveMovements, isLoading: lRM } = useAllReserveMovements(sheetId);
   const { data: salaryConfig, isLoading: lS } = useSalaryConfig(sheetId);
   const { data: confirmedFixedIds, isLoading: lCF } = useConfirmedFixedExpenseIds(
     sheetId,

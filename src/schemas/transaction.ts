@@ -26,13 +26,68 @@ export const transactionSchema = z.object({
 
 export type TransactionInput = z.infer<typeof transactionSchema>;
 
-export const transactionCreateSchema = transactionSchema.omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-  deletedAt: true,
-  mesClave: true,
-});
+export const transactionCreateSchema = transactionSchema
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+    deletedAt: true,
+    mesClave: true,
+  })
+  .superRefine((data, ctx) => {
+    if (data.tipo === TransactionType.INGRESO) {
+      if (!data.cuentaDestino || data.cuentaDestino.length === 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["cuentaDestino"],
+          message: "La cuenta destino es obligatoria",
+        });
+      }
+    }
+    if (data.tipo === TransactionType.GASTO) {
+      if (!data.cuentaOrigen || data.cuentaOrigen.length === 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["cuentaOrigen"],
+          message: "La cuenta origen es obligatoria",
+        });
+      }
+      if (!data.metodo || data.metodo.length === 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["metodo"],
+          message: "El metodo de pago es obligatorio",
+        });
+      }
+    }
+    if (data.tipo === TransactionType.TRANSFERENCIA_INTERNA) {
+      if (!data.cuentaOrigen || data.cuentaOrigen.length === 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["cuentaOrigen"],
+          message: "La cuenta origen es obligatoria",
+        });
+      }
+      if (!data.cuentaDestino || data.cuentaDestino.length === 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["cuentaDestino"],
+          message: "La cuenta destino es obligatoria",
+        });
+      }
+      if (
+        data.cuentaOrigen &&
+        data.cuentaDestino &&
+        data.cuentaOrigen === data.cuentaDestino
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["cuentaDestino"],
+          message: "La cuenta destino no puede ser la misma que la de origen",
+        });
+      }
+    }
+  });
 
 export type TransactionCreateInput = z.infer<typeof transactionCreateSchema>;
 
@@ -46,6 +101,49 @@ export const transactionUpdateSchema = transactionSchema
   })
   .extend({
     categoria: z.string().max(100).optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.tipo === TransactionType.INGRESO) {
+      if (!data.cuentaDestino || data.cuentaDestino.length === 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["cuentaDestino"],
+          message: "La cuenta destino es obligatoria",
+        });
+      }
+    }
+    if (data.tipo === TransactionType.GASTO) {
+      if (!data.cuentaOrigen || data.cuentaOrigen.length === 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["cuentaOrigen"],
+          message: "La cuenta origen es obligatoria",
+        });
+      }
+      if (!data.metodo || data.metodo.length === 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["metodo"],
+          message: "El metodo de pago es obligatorio",
+        });
+      }
+    }
+    if (data.tipo === TransactionType.TRANSFERENCIA_INTERNA) {
+      if (!data.cuentaOrigen || data.cuentaOrigen.length === 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["cuentaOrigen"],
+          message: "La cuenta origen es obligatoria",
+        });
+      }
+      if (!data.cuentaDestino || data.cuentaDestino.length === 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["cuentaDestino"],
+          message: "La cuenta destino es obligatoria",
+        });
+      }
+    }
   });
 
 export type TransactionUpdateInput = z.infer<typeof transactionUpdateSchema>;

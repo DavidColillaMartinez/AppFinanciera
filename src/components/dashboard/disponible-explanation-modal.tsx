@@ -231,6 +231,14 @@ export function DisponibleExplanationModal({
             El Disponible no descuenta el ahorro ya ejecutado (se refleja en
             tus reservas, objetivos y pagos futuros).
           </p>
+          {available.plannedSavingsIsFallback && available.plannedSavings > 0 && (
+            <div className="rounded-lg border border-savings/30 bg-savings/5 p-2 text-xs">
+              <p className="text-muted-foreground">
+                El 20% es un valor recomendado por defecto. Define tus reservas,
+                objetivos o pagos futuros para usar tu plan real.
+              </p>
+            </div>
+          )}
           {savingsEmpty && (
             <Button asChild size="sm" variant="outline" className="w-full gap-2">
               <Link href="/savings/monthly">

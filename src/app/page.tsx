@@ -323,6 +323,11 @@ export default function VistaMesPage() {
   const monthlySavingsHasAny = monthlySavings.totalForMonth > 0 || monthlySavings.planned > 0;
 
   function handleAddType(type: TransactionType) {
+    if (type === TransactionType.AHORRO) {
+      setShowAddMenu(false);
+      router.push("/savings/monthly");
+      return;
+    }
     setSelectedType(type);
     setShowAddMenu(false);
     setShowTransactionForm(true);

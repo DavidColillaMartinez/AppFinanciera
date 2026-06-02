@@ -17,3 +17,19 @@ export const PAYMENT_METHOD_OPTIONS = [
   { value: PaymentMethod.DOMICILIACION, label: "Domiciliacion" },
   { value: PaymentMethod.OTRO, label: "Otro" },
 ];
+
+const ALLOWED_VALUES = new Set<string>(
+  Object.values(PaymentMethod) as string[],
+);
+
+export function normalizePaymentMethod(raw: string | undefined | null): string {
+  if (!raw) return "";
+  const value = String(raw).trim();
+  if (!value) return "";
+  if (ALLOWED_VALUES.has(value)) return value;
+  const lower = value.toLowerCase();
+  for (const allowed of ALLOWED_VALUES) {
+    if (allowed.toLowerCase() === lower) return allowed;
+  }
+  return PaymentMethod.OTRO;
+}

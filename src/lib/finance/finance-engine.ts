@@ -60,6 +60,8 @@ export interface AvailableBalanceBreakdown {
   deferredPayments: number;
   futurePaymentProvisions: number;
   plannedSavings: number;
+  plannedSavingsIsFallback: boolean;
+  plannedSavingsRecommended: number;
   executedSavings: number;
   explanation: AvailableBalanceLine[];
 }
@@ -406,9 +408,7 @@ export function getMonthlySavings(ctx: FinanceContext): MonthlySavingsBreakdown 
 
   const planned =
     ctx.reserves.filter(isActiveReserve).reduce((sum, r) => sum + r.aporteMensualSugerido, 0) +
-    ctx.futurePayments
-      .filter(isActiveFuturePayment)
-      .reduce((sum, f) => sum + f.aporteMensual, 0);
+    ctx.goals.filter(isActiveGoal).reduce((sum, g) => sum + g.aporteMensual, 0);
 
   const executionRatio = planned > 0 ? totalForMonth / planned : 0;
 
@@ -502,7 +502,16 @@ export function getAvailableBalance(
 
   const netForObligations =
     income - variableExpenses - fixedExpensesConfirmed - fixedExpensesPending - deferredPayments;
-  const plannedSavings = Math.max(0, netForObligations * DEFAULT_SAVINGS_RATE);
+  const plannedSavingsRecommended = Math.max(
+    0,
+    netForObligations * DEFAULT_SAVINGS_RATE,
+  );
+
+  const userPlannedSavings = monthly.planned;
+  const plannedSavingsIsFallback = userPlannedSavings <= 0;
+  const plannedSavings = plannedSavingsIsFallback
+    ? plannedSavingsRecommended
+    : userPlannedSavings;
 
   const available =
     income -
@@ -524,6 +533,8 @@ export function getAvailableBalance(
     deferredPayments,
     futurePaymentProvisions,
     plannedSavings,
+    plannedSavingsIsFallback,
+    plannedSavingsRecommended,
     executedSavings,
     explanation: explainAvailableBalance({
       income,
@@ -535,6 +546,8 @@ export function getAvailableBalance(
       deferredPayments,
       futurePaymentProvisions,
       plannedSavings,
+      plannedSavingsIsFallback,
+      plannedSavingsRecommended,
       executedSavings,
       available,
     }),
@@ -596,7 +609,9 @@ export function explainAvailableBalance(
   }
   if (values.plannedSavings > 0) {
     lines.push({
-      label: "Ahorro planificado",
+      label: values.plannedSavingsIsFallback
+        ? "Ahorro recomendado (20% fallback)"
+        : "Ahorro planificado",
       amount: -values.plannedSavings,
       type: "saving",
     });

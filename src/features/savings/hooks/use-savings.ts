@@ -171,6 +171,10 @@ export function useUpdateReserveMovement(sheetId: string | null) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [SAVINGS_LEDGER_QUERY_KEY] });
       queryClient.invalidateQueries({ queryKey: ["reserveMovements"] });
+      queryClient.invalidateQueries({ queryKey: ["reserves"] });
+      queryClient.invalidateQueries({ queryKey: ["goals"] });
+      queryClient.invalidateQueries({ queryKey: ["futurePayments"] });
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
     },
   });
 }
@@ -185,6 +189,10 @@ export function useDeleteReserveMovement(sheetId: string | null) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [SAVINGS_LEDGER_QUERY_KEY] });
       queryClient.invalidateQueries({ queryKey: ["reserveMovements"] });
+      queryClient.invalidateQueries({ queryKey: ["reserves"] });
+      queryClient.invalidateQueries({ queryKey: ["goals"] });
+      queryClient.invalidateQueries({ queryKey: ["futurePayments"] });
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
     },
   });
 }

@@ -182,6 +182,10 @@ function TransactionsContent() {
   }
 
   function handleAddType(type: TransactionType) {
+    if (type === TransactionType.AHORRO) {
+      router.push("/savings/monthly");
+      return;
+    }
     setSelectedType(type);
     setEditingId(null);
     setShowForm(true);
@@ -240,7 +244,10 @@ function TransactionsContent() {
         <input
           type="month"
           value={selectedMonth}
-          onChange={(e) => setSelectedMonth(e.target.value)}
+          onChange={(e) => {
+            setSelectedMonth(e.target.value);
+            if (activeQueryFilters && queryMonth) clearQueryFilters();
+          }}
           className="rounded-xl border border-input bg-card px-3 py-2 text-sm shadow-sm transition-colors hover:border-primary/50 focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/20 flex-1"
         />
         <div className="relative flex-1">
@@ -422,8 +429,9 @@ function TransactionsContent() {
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => {
+                        setSelectedType(null);
                         setEditingId(t.id);
-                        setShowForm(false);
+                        setShowForm(true);
                       }}
                       className="p-1.5 rounded-md hover:bg-muted transition-colors"
                     >

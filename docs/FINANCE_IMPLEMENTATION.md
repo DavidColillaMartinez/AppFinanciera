@@ -205,27 +205,79 @@ live in `docs/FINANCE_AUDIT.md`.
 - **Template update required**: no.
 - **See**: `FINANCE_AUDIT.md` A1, A7, A9.
 
-## Phase 9 — Forms and movement flows — `pending`
+## Phase 8.5 — Critical post-dashboard fixes — `implemented`
 
-- **Purpose**: tighten required fields per movement type and finalize the saving
-  flow once Phase 7 is in place.
-- **Pending goals**:
-  - `TransactionForm` branches by type:
-    - `Ingreso` → required `cuentaDestino`, no `metodo`.
-    - `Gasto` → required `cuentaOrigen`, `metodo` from the fixed selector.
-    - `Transferencia interna` → required `cuentaOrigen` and `cuentaDestino`.
-    - `Ahorro` → required destination reserve / goal / future payment (or `general` fallback).
-  - Required fields enforced at the Zod level.
-  - `/transactions?filterType=Ingreso|Gasto` applies the filter at the hook level.
-  - Movement edit re-fetches after update.
-  - `useSeedDefaultCategories` does not duplicate.
-  - Payment method list (`Tarjeta / Efectivo / Bizum / Transferencia / Domiciliación / Otro`) is either narrowed or explicitly documented as a superset of the spec.
-- **Likely files**:
-  - `src/features/transactions/components/transaction-form.tsx`
-  - `src/schemas/transaction*.ts`
-  - `src/features/transactions/hooks/use-transactions.ts`
-  - `src/app/transactions/page.tsx`
-- **See**: `FINANCE_AUDIT.md` A3, A13.
+- **Purpose**: fix correctness bugs discovered after Phase 7 and Phase 8
+  (ledger soft-delete, savings double counting, planned savings placeholder,
+  movement edit, legacy reserve movement hook).
+- **Fixes**:
+  - **A1** — `src/lib/finance/savings-ledger.ts`: added `"Eliminado"` to the
+    `TipoMovimientoReserva` enum and updated `normalizeTipoMovimiento` to
+    preserve the sentinel instead of mapping it to `"aporte"`. Soft-deleted
+    and unconfirmed ledger rows are now properly excluded from balances,
+    monthly savings, and progress by `getActiveMovements`. `unconfirmMonthlyPlannedSaving`
+    and `softDeleteReserveMovement` now write the sentinel literally.
+  - **A2** — verified the existing `LEDGER-` id guard in `getMonthlySavings`
+    and `getGeneralSavings` prevents double counting between generic
+    `Ahorro` movements and ledger entries. No additional changes.
+  - **A3** — `src/lib/finance/finance-engine.ts`: `getAvailableBalance` now
+    uses the user's real monthly plan
+    (`Reservas.aporteMensualSugerido + Objetivos.aporteMensual`) as
+    `plannedSavings`. The 20% fallback is kept only when no real plan
+    exists. The breakdown now exposes
+    `plannedSavingsIsFallback` and `plannedSavingsRecommended`. The
+    `DisponibleExplanationModal` shows a "20% fallback" hint when the flag
+    is true. `getMonthlySavings.planned` no longer includes future payment
+    `aporteMensual` (already in `futurePaymentProvisions`), so the same
+    target is no longer subtracted twice.
+  - **A4** — `src/app/transactions/page.tsx`: edit button now calls
+    `setShowForm(true)` and resets `selectedType` so the dialog opens with
+    the selected movement prefilled. The transaction form already accepted
+    `initialData` correctly; only the trigger was broken.
+  - **A5** — `src/features/reserve-movements/hooks/use-reserve-movements.ts`:
+    `useCreateReserveMovement` now branches on `tipoMovimiento` and calls
+    `useCreateSavingsWithdrawal` when the form says `retirada`. Legacy
+    callers (e.g. `reserve-movement-form.tsx`) now save withdrawals
+    correctly. Cache invalidation expanded to include
+    `["goals", "futurePayments", "transactions", "savingsLedger"]`.
+- **See**: `FINANCE_AUDIT.md` A1, A3, A4, A5, A7, A8, A9.
+
+## Phase 9 — Forms and movement flows — `implemented`
+
+- **Purpose**: tighten required fields per movement type, finalize the
+  saving flow, ensure categories, accounts, filters and quick actions
+  work end to end.
+- **Main files**:
+  - `src/features/transactions/components/transaction-form.tsx` — branches
+    by `selectedType` (Ingreso / Gasto / Transferencia). Income form
+    requires `cuentaDestino` and never shows `metodo`. Expense form
+    requires `cuentaOrigen`, `metodo` selector and an expense-compatible
+    category. Transfer form requires both accounts and rejects
+    same-account. The form drops the "Ahorro" option from the type
+    selector. When the caller passes `defaultType = "Ahorro"`, the form
+    shows a banner pointing to `/savings/monthly`.
+  - `src/schemas/transaction.ts` — `superRefine` rules enforce the
+    required-field rules per type for both create and update.
+  - `src/constants/payment-methods.ts` — added `normalizePaymentMethod`
+    helper used on read and write.
+  - `src/features/transactions/hooks/use-transactions.ts` — applies
+    `normalizePaymentMethod` on read; clears `metodo` for income, forces
+    `Transferencia` for transfer on write. Cache invalidation expanded to
+    cover savings, reserves, goals, future payments.
+  - `src/app/transactions/page.tsx` — "Ahorro" quick action redirects to
+    `/savings/monthly`. Editing prefills the dialog. The
+    `?filterType=...&month=...` banner now also clears when the user
+    changes the month manually.
+  - `src/app/page.tsx` — "Ahorro" FAB action redirects to
+    `/savings/monthly`. The legacy `useReserveMovements` import is gone.
+  - `src/hooks/use-finance-summary.ts` — switched to
+    `useAllReserveMovements` so the dashboard and the savings form share
+    one query key.
+  - `src/features/categories/hooks/use-categories.ts` and
+    `src/features/accounts/hooks/use-accounts.ts` — cache invalidation
+    expanded to invalidate `["transactions"]` so dashboards and forms
+    refresh after a category or account change.
+- **See**: `FINANCE_AUDIT.md` A3, A11, A12, A13.
 
 ## Phase 10 — Google session and Sheet connection recovery — `pending`
 
@@ -276,6 +328,7 @@ live in `docs/FINANCE_AUDIT.md`.
 | 6 | Fixed expenses monthly confirmation | implemented |
 | 7 | Savings ledger (`Mov_reservas`) | implemented |
 | 8 | Dashboard metrics using the engine | implemented |
-| 9 | Forms and movement flows | pending |
+| 8.5 | Critical post-dashboard fixes | implemented |
+| 9 | Forms and movement flows | implemented |
 | 10 | Google session and Sheet connection recovery | pending |
 | 11 | UI / design polish | pending |
