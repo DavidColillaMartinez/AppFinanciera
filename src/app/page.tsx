@@ -52,6 +52,7 @@ import { useGoals } from "@/features/goals/hooks/use-goals";
 import { useTransactions } from "@/features/transactions/hooks/use-transactions";
 import { calculateExpensesByCategory } from "@/lib/finance/calculations";
 import { generateMonthKey } from "@/lib/sheets/adapters";
+import { hasToken } from "@/lib/sheets/client";
 import { LoadingState } from "@/components/states/loading-state";
 import { ErrorState } from "@/components/states/error-state";
 import { EmptyState } from "@/components/states/empty-state";
@@ -157,6 +158,7 @@ function MetricCard({
 export default function VistaMesPage() {
   const router = useRouter();
   const { sheetId, dashboardConfig, addSalaryMonth } = useAppStore();
+  const dataReady = !!sheetId && hasToken();
   const [selectedMonth, setSelectedMonth] = useState(
     new Date().toISOString().slice(0, 7),
   );
@@ -189,15 +191,15 @@ export default function VistaMesPage() {
   const {
     data: transactions,
     refetch: refetchTransactions,
-  } = useTransactions(sheetId, selectedMonth);
-  const { data: categories } = useCategories(sheetId);
-  const { data: accounts } = useAccounts(sheetId);
-  const { data: fixedExpenses } = useFixedExpenses(sheetId);
-  const { data: futurePayments } = useFuturePayments(sheetId);
-  const { data: reserves } = useReserves(sheetId);
-  const { data: goals } = useGoals(sheetId);
-  const { data: salaryConfig } = useSalaryConfig(sheetId);
-  const ensureSalary = useEnsureSalaryForMonth(sheetId);
+  } = useTransactions(dataReady ? sheetId : null, selectedMonth);
+  const { data: categories } = useCategories(dataReady ? sheetId : null);
+  const { data: accounts } = useAccounts(dataReady ? sheetId : null);
+  const { data: fixedExpenses } = useFixedExpenses(dataReady ? sheetId : null);
+  const { data: futurePayments } = useFuturePayments(dataReady ? sheetId : null);
+  const { data: reserves } = useReserves(dataReady ? sheetId : null);
+  const { data: goals } = useGoals(dataReady ? sheetId : null);
+  const { data: salaryConfig } = useSalaryConfig(dataReady ? sheetId : null);
+  const ensureSalary = useEnsureSalaryForMonth(dataReady ? sheetId : null);
 
   const [year, month] = selectedMonth.split("-").map(Number);
   const monthName = MONTH_NAMES[(month ?? 1) - 1] ?? "";
@@ -363,6 +365,22 @@ export default function VistaMesPage() {
           action={{
             label: "Conectar hoja",
             onClick: () => router.push("/onboarding"),
+          }}
+        />
+      </div>
+    );
+  }
+
+  if (!hasToken()) {
+    return (
+      <div className="px-4 py-6 space-y-4">
+        <EmptyState
+          title="Sesion de Google caducada"
+          description="Vuelve a iniciar sesion para continuar."
+          type="empty"
+          action={{
+            label: "Reconectar",
+            onClick: () => router.push("/onboarding?error=auth_failed&step=google"),
           }}
         />
       </div>

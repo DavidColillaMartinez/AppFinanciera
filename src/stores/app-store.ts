@@ -60,17 +60,21 @@ const DEFAULT_DASHBOARD_CONFIG: DashboardConfig = {
   ],
 };
 
+export type AuthStatus = "unknown" | "authenticated" | "expired" | "missing";
+
 export interface AppState {
   sheetId: string | null;
   sheetUrl: string | null;
   isConnected: boolean;
   templateVersion: string | null;
   appMinVersion: string | null;
+  lastConnectedAt: string | null;
   currency: string;
   activeMonth: number;
   activeYear: number;
   connectionErrors: string[];
   hasSeenOnboarding: boolean;
+  authStatus: AuthStatus;
   dashboardConfig: DashboardConfig;
   monthlyIncome: number;
   incomeType: "fixed" | "variable";
@@ -82,10 +86,12 @@ export interface AppState {
 export interface AppActions {
   setSheetConnection: (sheetId: string, sheetUrl: string) => void;
   disconnect: () => void;
+  logoutGoogle: () => void;
   setConfig: (config: Partial<AppState>) => void;
   setConnectionErrors: (errors: string[]) => void;
   clearErrors: () => void;
   setOnboardingSeen: () => void;
+  setAuthStatus: (status: AuthStatus) => void;
   setDashboardConfig: (config: Partial<DashboardConfig>) => void;
   toggleWidget: (widgetId: string) => void;
   moveWidget: (widgetId: string, direction: "up" | "down") => void;
@@ -111,11 +117,13 @@ export const useAppStore = create<AppState & AppActions>()(
       isConnected: false,
       templateVersion: null,
       appMinVersion: null,
+      lastConnectedAt: null,
       currency: "EUR",
       activeMonth: new Date().getMonth() + 1,
       activeYear: new Date().getFullYear(),
       connectionErrors: [],
       hasSeenOnboarding: false,
+      authStatus: "unknown",
       dashboardConfig: DEFAULT_DASHBOARD_CONFIG,
       monthlyIncome: 0,
       incomeType: "fixed",
@@ -128,7 +136,9 @@ export const useAppStore = create<AppState & AppActions>()(
           sheetId,
           sheetUrl,
           isConnected: true,
+          lastConnectedAt: new Date().toISOString(),
           connectionErrors: [],
+          authStatus: "authenticated",
         }),
 
       disconnect: () =>
@@ -138,7 +148,21 @@ export const useAppStore = create<AppState & AppActions>()(
           isConnected: false,
           templateVersion: null,
           appMinVersion: null,
+          lastConnectedAt: null,
           connectionErrors: [],
+        }),
+
+      logoutGoogle: () =>
+        set({
+          sheetId: null,
+          sheetUrl: null,
+          isConnected: false,
+          templateVersion: null,
+          appMinVersion: null,
+          lastConnectedAt: null,
+          connectionErrors: [],
+          authStatus: "missing",
+          hasSeenOnboarding: false,
         }),
 
       setConfig: (config) => set((state) => ({ ...state, ...config })),
@@ -148,6 +172,8 @@ export const useAppStore = create<AppState & AppActions>()(
       clearErrors: () => set({ connectionErrors: [] }),
 
       setOnboardingSeen: () => set({ hasSeenOnboarding: true }),
+
+      setAuthStatus: (status) => set({ authStatus: status }),
 
       setDashboardConfig: (config) =>
         set((state) => ({
@@ -264,15 +290,19 @@ export const useAppStore = create<AppState & AppActions>()(
     }),
     {
       name: STORAGE_KEY,
-      version: 2,
+      version: 3,
       partialize: (state) => ({
         sheetId: state.sheetId,
         sheetUrl: state.sheetUrl,
         isConnected: state.isConnected,
+        templateVersion: state.templateVersion,
+        appMinVersion: state.appMinVersion,
+        lastConnectedAt: state.lastConnectedAt,
         currency: state.currency,
         activeMonth: state.activeMonth,
         activeYear: state.activeYear,
         hasSeenOnboarding: state.hasSeenOnboarding,
+        authStatus: state.authStatus,
         dashboardConfig: state.dashboardConfig,
         monthlyIncome: state.monthlyIncome,
         incomeType: state.incomeType,
@@ -298,6 +328,9 @@ export const useAppStore = create<AppState & AppActions>()(
           }
           if (!Array.isArray(stored.charts)) {
             state.dashboardConfig = { ...state.dashboardConfig, charts: defaults.charts };
+          }
+          if (!state.authStatus) {
+            state.authStatus = state.sheetId ? "authenticated" : "missing";
           }
         }
       },

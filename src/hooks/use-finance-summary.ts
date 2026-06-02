@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { useAppStore } from "@/stores/app-store";
+import { hasToken } from "@/lib/sheets/client";
 import { useTransactions } from "@/features/transactions/hooks/use-transactions";
 import { useCategories } from "@/features/categories/hooks/use-categories";
 import { useAccounts } from "@/features/accounts/hooks/use-accounts";
@@ -36,22 +37,24 @@ export function useFinanceSummary(
   options: UseFinanceSummaryOptions = {},
 ): UseFinanceSummaryResult {
   const { sheetId } = useAppStore();
+  const tokenOk = hasToken();
+  const effectiveSheetId = sheetId && tokenOk ? sheetId : null;
 
   const monthKey =
     options.monthKey ?? new Date().toISOString().slice(0, 7);
 
-  const { data: transactions, isLoading: lT, isError: eT } = useTransactions(sheetId, monthKey);
-  const { data: categories, isLoading: lC } = useCategories(sheetId);
-  const { data: accounts, isLoading: lA } = useAccounts(sheetId);
-  const { data: fixedExpenses, isLoading: lF } = useFixedExpenses(sheetId);
-  const { data: futurePayments, isLoading: lFP } = useFuturePayments(sheetId);
-  const { data: deferredPayments, isLoading: lD } = useDeferredPayments(sheetId);
-  const { data: reserves, isLoading: lR } = useReserves(sheetId);
-  const { data: goals, isLoading: lG } = useGoals(sheetId);
-  const { data: reserveMovements, isLoading: lRM } = useAllReserveMovements(sheetId);
-  const { data: salaryConfig, isLoading: lS } = useSalaryConfig(sheetId);
+  const { data: transactions, isLoading: lT, isError: eT } = useTransactions(effectiveSheetId, monthKey);
+  const { data: categories, isLoading: lC } = useCategories(effectiveSheetId);
+  const { data: accounts, isLoading: lA } = useAccounts(effectiveSheetId);
+  const { data: fixedExpenses, isLoading: lF } = useFixedExpenses(effectiveSheetId);
+  const { data: futurePayments, isLoading: lFP } = useFuturePayments(effectiveSheetId);
+  const { data: deferredPayments, isLoading: lD } = useDeferredPayments(effectiveSheetId);
+  const { data: reserves, isLoading: lR } = useReserves(effectiveSheetId);
+  const { data: goals, isLoading: lG } = useGoals(effectiveSheetId);
+  const { data: reserveMovements, isLoading: lRM } = useAllReserveMovements(effectiveSheetId);
+  const { data: salaryConfig, isLoading: lS } = useSalaryConfig(effectiveSheetId);
   const { data: confirmedFixedIds, isLoading: lCF } = useConfirmedFixedExpenseIds(
-    sheetId,
+    effectiveSheetId,
     monthKey,
   );
 
@@ -98,7 +101,7 @@ export function useFinanceSummary(
   return {
     summary,
     isLoading:
-      lT || lC || lA || lF || lFP || lD || lR || lG || lRM || lS || lCF,
+      !!effectiveSheetId && (lT || lC || lA || lF || lFP || lD || lR || lG || lRM || lS || lCF),
     isError: eT,
   };
 }

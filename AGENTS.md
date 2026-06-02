@@ -69,8 +69,9 @@ src/stores/app-store.ts (Zustand: connection state, config, salary tracking)
 
 - Token stored in `sessionStorage` (clears on tab close)
 - No proactive token check in `client-layout.tsx` — app tries API calls, handles 401/403 at call site
-- `SheetsApiError.isAuthError()` helper exists in `src/lib/sheets/client.ts`
-- If user sees auth error → redirect to `/onboarding?error=auth_failed`
+- `SheetsApiError.isAuthError()` returns `true` only for 401 (missing/expired/invalid token). 403 is treated as a Sheet permission / scope error and is **not** auto-logout: the user keeps the Google session and must re-share the Sheet or re-grant scopes manually.
+- `SheetsApiError.isPermissionError()` returns `true` for 403 and is used by the Sheet validator to show "Sin permisos".
+- If the user lands on a 401, `unwrapAuth` clears the token, dispatches `appfinanzas:auth-expired` and `client-layout.tsx` redirects to `/onboarding?error=auth_failed&step=google`.
 - Never commit `.env.local` or secrets
 
 ## Charts
@@ -89,46 +90,93 @@ src/stores/app-store.ts (Zustand: connection state, config, salary tracking)
 
 # Agent Rules — Finance Logic
 
-Before modifying any of the following areas, read `docs/FINANCE_LOGIC.md`:
+## Doc role and ownership
+
+- `docs/FINANCE_LOGIC.md` is the **official rulebook**. It must stay
+  **compact**: only the rules the app must follow today. No phase
+  reports, no long implementation summaries, no audit findings, no
+  historical context, no "why was this changed" prose.
+- `docs/FINANCE_LOGIC.md` is the only file that can change official
+  business rules. Editing it is a **rule change**, not a doc update.
+- `docs/FINANCE_IMPLEMENTATION.md` owns **implementation details**:
+  main files per phase, conventions, IDs, Config keys, phase status
+  table.
+- `docs/FINANCE_AUDIT.md` owns **historical findings**: every
+  discrepancy discovered during audit work and the status of the
+  follow-up.
+- `docs/FINANCE_LOGIC.backup.md` is the **last snapshot** of
+  `FINANCE_LOGIC.md` taken before the most recent rule change. It
+  exists so a bad rewrite can be reverted by reading the previous
+  state.
+
+## When to modify which file
+
+- For a **rule change** (formula, ID, status, behavior the engine
+  enforces) → update `docs/FINANCE_LOGIC.md` only. The implementation
+  file and the audit file may also move if the rule resolves a
+  finding or completes a phase.
+- For an **implementation change** that does not move the rules
+  (refactor, file move, new hook, new schema column) → update
+  `docs/FINANCE_IMPLEMENTATION.md` only. Do **not** touch
+  `FINANCE_LOGIC.md`.
+- For a **finding** (a bug, a gap, a deviation) → record it in
+  `docs/FINANCE_AUDIT.md`. Do **not** paste it into the rulebook.
+- For a **purely visual** change (spacing, colors, copy) → touch none
+  of the finance docs. The official logic does not change because a
+  label moved.
+- For **Phase 11 or any visual / UI polish** → do not modify
+  `docs/FINANCE_LOGIC.md` unless business logic also changes.
+
+## Before you modify `docs/FINANCE_LOGIC.md`
+
+1. Copy the current content of `docs/FINANCE_LOGIC.md` into
+   `docs/FINANCE_LOGIC.backup.md` first. This rule is non-negotiable
+   and applies to every change, no matter how small.
+2. Make the rule change. Keep the file compact. Prefer editing
+   existing sections over adding new ones.
+3. If the change resolves a known audit finding, update the status
+   marker in `docs/FINANCE_AUDIT.md`.
+4. If the change is part of a phase, update the phase status in
+   `docs/FINANCE_IMPLEMENTATION.md`.
+
+## Areas that require reading the rulebook first
+
+Before modifying any of the following areas, read
+`docs/FINANCE_LOGIC.md`:
 
 - financial calculations;
 - dashboard metrics;
 - available balance logic;
-- salary/payroll logic;
-- savings/reserves/goals logic;
+- salary / payroll logic;
+- savings / reserves / goals logic;
 - fixed expenses logic;
 - future payments logic;
-- deferred/installment payments logic;
-- movement creation/editing logic;
+- deferred / installment payments logic;
+- movement creation / editing logic;
 - Google Sheet schema, readers, writers or validation;
-- account balance or account role logic.
+- account balance or account role logic;
+- Google session and Sheet connection rules (auth, 401/403,
+  reconnect, disconnect).
 
-`docs/FINANCE_LOGIC.md` is the compact source of truth. Use the other files only
-when you actually need them:
+Use the other files only when you actually need them:
 
-- `docs/FINANCE_AUDIT.md` — historical findings and "why was this changed" context.
-  Read only when auditing old code or checking that a past finding is resolved.
-- `docs/FINANCE_IMPLEMENTATION.md` — phase tracker, main files per phase,
-  conventions, IDs and Config keys. Read only when checking phase status or
-  implementation history.
-- `docs/FINANCE_LOGIC.backup.md` — full snapshot of `FINANCE_LOGIC.md` from the
-  last time the official logic was rewritten.
+- `docs/FINANCE_AUDIT.md` — historical findings and "why was this
+  changed" context. Read only when auditing old code or checking that
+  a past finding is resolved.
+- `docs/FINANCE_IMPLEMENTATION.md` — phase tracker, main files per
+  phase, conventions, IDs and Config keys. Read only when checking
+  phase status or implementation history.
+- `docs/FINANCE_LOGIC.backup.md` — full snapshot from the last
+  rewrite. Read only when reverting or comparing against a previous
+  rule.
 
-Do not read `FINANCE_AUDIT.md` or `FINANCE_IMPLEMENTATION.md` for purely visual
-changes such as spacing, colors, minor layout tweaks or copy-only changes. Do
-not read any finance doc when the change is purely visual.
+Do not read `FINANCE_AUDIT.md` or `FINANCE_IMPLEMENTATION.md` for
+purely visual changes such as spacing, colors, minor layout tweaks or
+copy-only changes. Do not read any finance doc when the change is
+purely visual.
 
-When changing the official finance logic:
-
-1. Copy the current content of `docs/FINANCE_LOGIC.md` into
-   `docs/FINANCE_LOGIC.backup.md`.
-2. Update `docs/FINANCE_LOGIC.md` with the new official logic. Keep it concise.
-3. If the change resolves a known audit finding, update the status marker in
-   `docs/FINANCE_AUDIT.md`.
-4. If the change is part of a phase, update the phase status in
-   `docs/FINANCE_IMPLEMENTATION.md`.
-
-The official data source is the app Google Sheet template / connected Google
-Sheet. The Sheet is the database; the app owns the business logic. Do not
-reference any personal spreadsheet or user file in project docs.
+The official data source is the app Google Sheet template / connected
+Google Sheet. The Sheet is the database; the app owns the business
+logic. Do not reference any personal spreadsheet or user file in
+project docs.
 

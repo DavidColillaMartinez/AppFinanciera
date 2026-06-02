@@ -279,24 +279,104 @@ live in `docs/FINANCE_AUDIT.md`.
     refresh after a category or account change.
 - **See**: `FINANCE_AUDIT.md` A3, A11, A12, A13.
 
-## Phase 10 — Google session and Sheet connection recovery — `pending`
+## Phase 10 — Google session and Sheet connection recovery — `implemented`
 
-- **Purpose**: separate Google auth from Sheet connection; centralize token
-  handling and 401 recovery; allow reconnecting a Sheet without re-doing Google
-  login.
-- **Pending goals**:
-  - Sheets request layer in `src/lib/sheets/client.ts` reads the token from `sessionStorage`.
-  - On 401, the layer clears the token, fires a global event, and the user is redirected to `/onboarding?error=auth_required` (preserving the previous `sheetId` if any).
-  - `disconnectSheet()` action: clears `sheetId` and `sheetUrl` but does NOT touch the Google token.
-  - `logoutGoogle()` action: clears the token and the Sheet connection.
-  - Reconnect flow: the user can re-paste a Sheet URL without re-doing Google login, as long as the token is still valid.
-  - Optional: Sheets API quota throttling.
+- **Purpose**: separate Google auth from Sheet connection; centralize
+  token handling and 401/403 recovery; allow reconnecting a Sheet
+  without re-doing Google login; recover from a session that is
+  persisted on disk but whose token was lost (tab close, expiry).
+- **Main files**:
+  - `src/lib/sheets/client.ts` — added `SheetsAuthError` and
+    `SheetsNetworkError` subclasses; wrapped every fetch call in
+    `unwrapAuth` which on 401/403 clears the token, dispatches a
+    `appfinanzas:auth-expired` window event and rethrows as
+    `SheetsAuthError`. Other 4xx/5xx are rethrown as plain
+    `SheetsApiError`.
+  - `src/lib/query-client.ts` — new file. Centralised
+    `queryClientDefaultOptions` that short-circuits `retry` on
+    `SheetsAuthError` (no infinite loops) and caps other retries at 1.
+  - `src/stores/app-store.ts` — added `authStatus` (mirrors
+    sessionStorage token state), `lastConnectedAt`. New
+    `logoutGoogle()` action. Persist `version` bumped to 3.
+    `disconnect()` no longer touches the token. The persisted
+    `sheetId`, `sheetUrl`, `templateVersion`, `appMinVersion`,
+    `lastConnectedAt` are non-sensitive metadata only.
+  - `src/hooks/use-finance-summary.ts` — reads `hasToken()` and
+    passes `null` to all sub-hooks when no token is present, so the
+    dashboard does not flash a "No access token" error when the user
+    reopens the app after sessionStorage was cleared.
+  - `src/components/client-layout.tsx` — extended redirect rules: a
+    persisted `sheetId` with no token redirects to
+    `/onboarding?error=auth_failed&step=google`; a missing `sheetId`
+    with a token redirects to `/onboarding?step=sheet`; neither
+    redirects to `/onboarding?error=auth_required`. Listens to
+    `appfinanzas:auth-expired` and re-runs the same redirect. Bottom
+    nav only renders when both `isConnected` and `hasToken()` are
+    true. `/settings` and `/settings/preferencias` were removed from
+    the public-route list so the redirect runs there too.
+  - `src/app/onboarding/page.tsx` — accepts `?error=auth_failed`,
+    `?error=auth_required`, `?step=sheet`. Prefills the Sheet input
+    from `last_sheet_url` / `useAppStore.sheetUrl`. Shows a "Ultima
+    Sheet conectada" card with a one-tap "Reutilizar" button. The
+    Google button label switches to "Re-conectar sesion" when a
+    token is still in `sessionStorage` so the user understands the
+    state.
+  - `src/app/auth/callback/page.tsx` — sets `authStatus =
+    "authenticated"` after a successful login.
+  - `src/app/settings/preferencias/page.tsx` — three actions, three
+    different state effects:
+    - "Desconectar" → `disconnect()` (no token touch) + redirect to
+      `/onboarding?step=sheet`.
+    - "Cambiar Sheet" → `disconnect()` (no token touch) + clear
+      `last_sheet_url` + redirect to `/onboarding?step=sheet`.
+    - "Cerrar sesion de Google" → `clearToken()` + `logoutGoogle()` +
+      clear `last_sheet_url` + redirect to `/onboarding`.
+    Shows `lastConnectedAt` and `templateVersion` for the connected
+    Sheet.
+  - `src/app/page.tsx` — gates the dashboard's queries by
+    `dataReady = !!sheetId && hasToken()`. Renders a "Sesion de
+    Google caducada" empty state with a "Reconectar" button when the
+    user lands on `/` with a persisted `sheetId` but no token.
+- **Auth / session behavior**:
+  - Token expiry → `client.ts` clears the token and emits the event;
+    `client-layout.tsx` redirects to the onboarding step that
+    triggers `/auth/google` (real Google login, not just an
+    animation). The previously connected Sheet is preserved in
+    `zustand` and reconnected automatically once the callback
+    succeeds.
+  - The reconnect button on the dashboard and on the onboarding
+    screen both call `window.location.href = "/auth/google"`. The
+    `/auth/google` page calls `getGoogleAuthUrl()` (real OAuth URL)
+    and replaces the location. There is no simulated animation.
+  - React Query `retry` skips `SheetsAuthError`, so the failing
+    query stops immediately instead of looping.
+- **Disconnect vs Logout**:
+  - Disconnect Sheet: keeps `google_access_token`; the user can
+    paste a new Sheet URL on `/onboarding?step=sheet` without
+    re-logging in. `isConnected` is reset to `false`.
+  - Logout Google: clears the token, the Sheet state, the
+    `authStatus` and the `hasSeenOnboarding` flag. Returns to the
+    fresh onboarding flow.
+  - Change Sheet: same as Disconnect Sheet but also clears the
+    prefilled `last_sheet_url` so the user is forced to enter the
+    new URL.
+- **What is stored where**:
+  - `sessionStorage.google_access_token` — Google access token
+    (cleared on tab close, never persisted beyond a tab).
+  - `localStorage.app_finanzas_state` (zustand) — non-sensitive
+    Sheet metadata: `sheetId`, `sheetUrl`, `templateVersion`,
+    `appMinVersion`, `lastConnectedAt`, plus UI state (active month,
+    dashboard config, etc.).
+  - `localStorage.last_sheet_url` — mirror of `sheetUrl` used to
+    prefill the onboarding input. Cleared on disconnect, change and
+    logout.
+  - No Google refresh tokens are stored.
+- **Remaining Phase 11 items** (not addressed in Phase 10):
+  - Dashboard header polish.
+  - Full chart customizer UX.
+  - Onboarding visual cleanup.
   - Optional: `readSheetData` pagination beyond 1000 rows.
-- **Likely files**:
-  - `src/lib/sheets/client.ts`
-  - `src/stores/app-store.ts`
-  - `src/lib/sheets/writer.ts`, `src/lib/sheets/reader.ts`
-  - `src/app/onboarding/page.tsx`
+  - Optional: Sheets API quota throttling on 429.
 - **See**: `FINANCE_AUDIT.md` A11, A12.
 
 ## Phase 11 — UI / design polish — `pending`
@@ -330,5 +410,5 @@ live in `docs/FINANCE_AUDIT.md`.
 | 8 | Dashboard metrics using the engine | implemented |
 | 8.5 | Critical post-dashboard fixes | implemented |
 | 9 | Forms and movement flows | implemented |
-| 10 | Google session and Sheet connection recovery | pending |
+| 10 | Google session and Sheet connection recovery | implemented |
 | 11 | UI / design polish | pending |

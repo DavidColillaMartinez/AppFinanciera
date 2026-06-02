@@ -3,10 +3,9 @@
 import { useEffect, useState } from "react";
 import { getAccessTokenFromUrl, clearHash } from "@/lib/google/auth";
 import { useAppStore } from "@/stores/app-store";
-import { hasToken } from "@/lib/sheets/client";
 
 export default function AuthCallbackPage() {
-  const { setOnboardingSeen, isConnected } = useAppStore();
+  const { setOnboardingSeen, isConnected, setAuthStatus } = useAppStore();
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -22,6 +21,7 @@ export default function AuthCallbackPage() {
       sessionStorage.setItem("google_access_token", token);
       clearHash();
       setOnboardingSeen();
+      setAuthStatus("authenticated");
 
       if (isConnected) {
         window.location.replace("/");
@@ -32,7 +32,7 @@ export default function AuthCallbackPage() {
       clearHash();
       setError("Token de acceso invalido o expirado.");
     }
-  }, [setOnboardingSeen, isConnected]);
+  }, [setOnboardingSeen, isConnected, setAuthStatus]);
 
   if (error) {
     return (

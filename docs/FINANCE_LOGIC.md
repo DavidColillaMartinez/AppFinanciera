@@ -167,8 +167,10 @@ installment purchases, debt payments).
 
 - Active installments reduce available money via `getDeferredPayments(ctx)`
   (sum of `cuotaMensual`).
-- Will follow the same month-by-month confirmation pattern as fixed expenses
-  (deterministic ID `TX-DEFER-YYYY-MM-aplazadoId`). Tracked under Phase 7.
+- Deferred/installment payments should follow a month-by-month confirmation
+  pattern similar to fixed expenses, using deterministic IDs such as
+  `TX-DEFER-YYYY-MM-aplazadoId`. This remains pending for a future functional
+  phase unless already implemented elsewhere.
 
 ### 4.5 Unexpected expenses
 
@@ -387,19 +389,101 @@ The dashboard consumes the engine via `useFinanceSummary({ monthKey })`. It does
   applies the filter via `useSearchParams`. A banner shows active filters
   with a "Limpiar" action that strips the query params.
 
-## 11. Google session and Sheet connection
+## 11. Google session and Sheet connection (implemented Phase 10)
 
-These are two separate states.
+These are two separate states and are persisted / cleared independently.
 
-- Google token expiry:
-  - clear the invalid token;
-  - keep the saved `sheetId` / `sheetUrl` if possible;
-  - trigger a fresh Google login;
-  - restore the Sheet connection once the user logs in again.
-- "Disconnect Sheet" → clears the Sheet connection, keeps Google auth.
-- "Logout Google" → clears the token and the Sheet connection.
-- Changing the Sheet must not log the user out from Google.
-- Implementation details live in Phase 10.
+### 11.1 State model
+
+- **Google session** (`googleSession`):
+  - Token lives in `sessionStorage` under `google_access_token`.
+  - Survives reloads of the same tab, dies on tab close.
+  - Never written to `localStorage` or any long-lived store.
+  - `useAppStore.authStatus` mirrors the in-memory state
+    (`unknown | authenticated | expired | missing`) for UI purposes.
+- **Sheet connection** (`sheetConnection`):
+  - Persisted in `zustand` `persist` middleware: `spreadsheetId`,
+    `sheetUrl`, `templateVersion`, `appMinVersion`, `lastConnectedAt`.
+  - Source of truth: the connected Google Sheet. The app keeps the
+    metadata in storage so it can re-validate and pre-fill the form on
+    reopen.
+  - `localStorage.last_sheet_url` mirrors `sheetUrl` for the prefill
+    input. It is treated as a cache, not a source of truth: the store
+    wins when both exist.
+
+### 11.2 Token expiration recovery
+
+- 401 and auth-related 403 errors trigger auth recovery. Sheet
+  permission 403 errors must be shown as Sheet access / permission
+  errors when distinguishable and must not force Google logout if the
+  Google session is still valid.
+- Practical classification (see `SheetsApiError.isAuthError()` and
+  `SheetsApiError.isPermissionError()` in `src/lib/sheets/client.ts`):
+  - `401` → auth recovery.
+  - `403` → Sheet permission / scope error. The Google session stays
+    valid; the user keeps the token and must re-share the Sheet or
+    re-grant scopes manually.
+  - `404` → "Sheet not found". The Google session stays valid.
+- Auth recovery path for `401`:
+  1. `clearToken()` removes the bad token from `sessionStorage`.
+  2. A `appfinanzas:auth-expired` custom event is dispatched.
+  3. A `SheetsAuthError` is thrown to the caller.
+- `client-layout.tsx` listens to that event and redirects to
+  `/onboarding?error=auth_failed&step=google`. The user does not need
+  to clear browser data.
+- React Query's `retry` callback short-circuits on `SheetsAuthError`
+  (`src/lib/query-client.ts`). No infinite loops.
+- The "Re-conectar" / "Iniciar sesion" buttons trigger a real full
+  Google OAuth flow via `/auth/google` → Google →
+  `/auth/callback?#access_token=...` → store token → redirect.
+- After successful login the callback redirects to `/` if a Sheet is
+  still connected, or to `/onboarding?step=sheet` to reconnect one.
+
+### 11.3 Disconnect Sheet (keeps Google session)
+
+- Trigger: "Desconectar" in `/settings/preferencias`.
+- Action: `useAppStore.disconnect()` clears `sheetId`, `sheetUrl`,
+  `templateVersion`, `appMinVersion`, `lastConnectedAt`. The token in
+  `sessionStorage` is NOT touched. `localStorage.last_sheet_url` is
+  removed.
+- Result: the user lands on `/onboarding?step=sheet` and can paste a
+  new URL without re-authenticating with Google.
+
+### 11.4 Logout from Google (clears session AND Sheet)
+
+- Trigger: "Cerrar sesion de Google" in `/settings/preferencias`.
+- Action: `clearToken()` + `useAppStore.logoutGoogle()` (which clears
+  Sheet state and `authStatus`) + `localStorage.removeItem("last_sheet_url")`.
+- Result: full reset. The user lands on `/onboarding` step 1
+  (Google login) with no prefilled Sheet.
+
+### 11.5 Change Sheet (no logout)
+
+- Trigger: "Cambiar Sheet" in `/settings/preferencias`.
+- Action: `disconnect()` (same as 11.3) without touching the token.
+  `localStorage.last_sheet_url` is removed so the user can paste a new
+  URL. After validating, the new Sheet is stored and `lastConnectedAt`
+  is updated.
+
+### 11.6 Reopen the app
+
+- `zustand` rehydrates `sheetConnection` from `localStorage`
+  automatically (storage key `app_finanzas_state`, version 3).
+- `client-layout.tsx` checks `hasToken()`:
+  - if missing and a `sheetId` was restored → redirect to
+    `/onboarding?error=auth_failed&step=google`;
+  - if missing and no `sheetId` → redirect to
+    `/onboarding?error=auth_required`;
+  - if present and `isConnected` is false → redirect to
+    `/onboarding?step=sheet` (prefill from `last_sheet_url`).
+- The onboarding form pre-fills the URL field from
+  `localStorage.last_sheet_url` and shows a "Ultima Sheet conectada"
+  card with a "Reutilizar" button.
+
+### 11.7 What is NOT stored
+
+- The Google access token is never written to `localStorage` or
+  persisted in `zustand`. Only the non-sensitive Sheet metadata is.
 
 ## 12. Template validation
 
@@ -447,11 +531,11 @@ required structure is present. Visual formatting is irrelevant.
 - Phase 8 — dashboard metrics using the engine — **implemented**.
 - Phase 8.5 — critical post-dashboard fixes — **implemented**.
 - Phase 9 — forms and movement flows — **implemented**.
-- Phase 10 — Google session and Sheet connection recovery — pending.
+- Phase 10 — Google session and Sheet connection recovery — **implemented**.
 - Phase 11 — UI / design polish — pending.
 
 Full phase details, files touched and conventions: `docs/FINANCE_IMPLEMENTATION.md`.
 
 ## 15. Next phase pointer
 
-**Phase 10 — Google session and Sheet connection recovery.**
+**Phase 11 — UI / design polish.**

@@ -16,7 +16,7 @@ import { isGoogleAuthConfigured } from "@/lib/google/auth";
 import { useAppStore } from "@/stores/app-store";
 import { SHEET_NAMES } from "@/constants/sheet-structure";
 import { validateSheetCompatibility, readConfig } from "@/lib/sheets/reader";
-import { getToken } from "@/lib/sheets/client";
+import { getToken, hasToken } from "@/lib/sheets/client";
 import { AlertCircle, CheckCircle2 } from "lucide-react";
 
 type Step = "google" | "sheet" | "validating" | "done" | "error";
@@ -27,18 +27,21 @@ function OnboardingContent() {
   const errorParam = searchParams.get("error");
   const stepParam = searchParams.get("step");
 
-  const { sheetId, isConnected, setSheetConnection, hasSeenOnboarding, setTemplateVersion } =
+  const { sheetId, sheetUrl: storedSheetUrl, isConnected, setSheetConnection, hasSeenOnboarding, setTemplateVersion, setAuthStatus } =
     useAppStore();
   const [step, setStep] = useState<Step>("google");
   const [sheetUrl, setSheetUrl] = useState(() => {
     if (typeof window !== "undefined") {
-      return localStorage.getItem("last_sheet_url") ?? "";
+      return (
+        localStorage.getItem("last_sheet_url") ??
+        (useAppStore.getState().sheetUrl ?? "")
+      );
     }
     return "";
   });
   const [error, setError] = useState<string | null>(
     errorParam === "auth_failed"
-      ? "Tu sesion ha expirado. Inicia sesion de nuevo para continuar."
+      ? "Tu sesion de Google ha caducado. Vuelve a iniciarla para continuar."
       : errorParam === "auth_required"
       ? "Necesitas iniciar sesion con Google para usar la app."
       : null,
@@ -50,12 +53,20 @@ function OnboardingContent() {
     const token = getToken();
     if (isConnected && sheetId) {
       setStep("done");
-    } else if (stepParam === "sheet" && token) {
+      return;
+    }
+    if (errorParam === "auth_failed") {
+      setStep("google");
+      return;
+    }
+    if (stepParam === "sheet" && token) {
       setStep("sheet");
     } else if (stepParam === "sheet" && !token) {
       setStep("google");
+    } else if (!token) {
+      setStep("google");
     }
-  }, [isConnected, sheetId, stepParam]);
+  }, [isConnected, sheetId, stepParam, errorParam]);
 
   function handleGoogleAuth() {
     window.location.href = "/auth/google";
@@ -97,7 +108,7 @@ function OnboardingContent() {
     try {
       const token = getToken();
       if (!token) {
-        setError("Sesion de Google caducada. Conecta de nuevo.");
+        setError("Sesion de Google caducada. Vuelve a iniciar sesion.");
         setStep("google");
         return;
       }
@@ -178,6 +189,7 @@ function OnboardingContent() {
         `https://docs.google.com/spreadsheets/d/${parsed}`,
       );
       localStorage.setItem("last_sheet_url", `https://docs.google.com/spreadsheets/d/${parsed}`);
+      setAuthStatus("authenticated");
       setStep("done");
       router.replace("/");
     } catch (e) {
@@ -186,11 +198,6 @@ function OnboardingContent() {
     } finally {
       setValidating(false);
     }
-  }
-
-  function handleManualPaste() {
-    setStep("sheet");
-    setError("Inicia sesion con Google primero.");
   }
 
   if (step === "done") {
@@ -232,7 +239,7 @@ function OnboardingContent() {
         {error && (
           <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800 flex items-start gap-2">
             <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
-            <span>{error}</span>
+            <span className="whitespace-pre-line">{error}</span>
           </div>
         )}
 
@@ -267,7 +274,7 @@ function OnboardingContent() {
                       d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
                     />
                   </svg>
-                  Iniciar sesion con Google
+                  {hasToken() ? "Re-conectar sesion" : "Iniciar sesion con Google"}
                 </Button>
               ) : (
                 <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 text-sm">
@@ -280,25 +287,6 @@ function OnboardingContent() {
                   </p>
                 </div>
               )}
-
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-border" />
-                </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-background px-2 text-muted-foreground">
-                    o
-                  </span>
-                </div>
-              </div>
-
-              <Button
-                onClick={handleManualPaste}
-                variant="outline"
-                className="w-full"
-              >
-                Ya tengo sesion - conectar Sheet
-              </Button>
 
               <div className="rounded-lg border border-blue-100 bg-blue-50 p-4">
                 <p className="text-sm font-medium text-blue-900 mb-2">
@@ -334,6 +322,21 @@ function OnboardingContent() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              {storedSheetUrl && (
+                <div className="rounded-lg bg-muted p-3 text-xs text-muted-foreground">
+                  <p>Ultima Sheet conectada:</p>
+                  <p className="font-mono truncate mt-1">{storedSheetUrl}</p>
+                  <Button
+                    size="sm"
+                    variant="link"
+                    className="h-auto p-0 mt-2"
+                    onClick={() => setSheetUrl(storedSheetUrl)}
+                  >
+                    Reutilizar
+                  </Button>
+                </div>
+              )}
+
               <div className="rounded-lg bg-muted p-4 text-sm">
                 <p className="font-medium mb-2">Como conseguir la URL:</p>
                 <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
@@ -363,7 +366,13 @@ function OnboardingContent() {
                 <Button onClick={handleSheetConnect} className="flex-1">
                   Conectar
                 </Button>
-                <Button onClick={() => setStep("google")} variant="outline">
+                <Button
+                  onClick={() => {
+                    setStep("google");
+                    if (!getToken()) router.push("/onboarding");
+                  }}
+                  variant="outline"
+                >
                   Atras
                 </Button>
               </div>

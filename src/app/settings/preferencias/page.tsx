@@ -1,11 +1,10 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useAppStore } from "@/stores/app-store";
-import { clearToken } from "@/lib/sheets/client";
+import { clearToken, getToken } from "@/lib/sheets/client";
 import { useRouter } from "next/navigation";
 import {
   FileSpreadsheet,
@@ -17,27 +16,34 @@ import {
 import { useToast } from "@/components/ui/toast";
 
 export default function PreferenciasPage() {
-  const { sheetId, sheetUrl, isConnected, disconnect } = useAppStore();
+  const { sheetId, sheetUrl, isConnected, disconnect, logoutGoogle, lastConnectedAt, templateVersion } = useAppStore();
   const router = useRouter();
   const { success } = useToast();
 
   function handleChangeSheet() {
     disconnect();
-    router.push("/onboarding?step=sheet");
+    localStorage.removeItem("last_sheet_url");
+    if (getToken()) {
+      router.push("/onboarding?step=sheet");
+    } else {
+      router.push("/onboarding?error=auth_required");
+    }
   }
 
   function handleDisconnectSheet() {
-    if (confirm("¿Desconectar la Sheet? La sesion de Google se mantiene.")) {
+    if (confirm("¿Desconectar la Sheet? La sesion de Google se mantiene. Podras conectar otra hoja sin volver a iniciar sesion.")) {
       disconnect();
+      localStorage.removeItem("last_sheet_url");
       router.push("/onboarding?step=sheet");
-      success("Sheet desconectada");
+      success("Sheet desconectada. Sesion de Google mantenida.");
     }
   }
 
   function handleDisconnectGoogle() {
-    if (confirm("¿Cerrar sesion de Google? Tendras que volver a iniciar sesion.")) {
+    if (confirm("¿Cerrar sesion de Google? Se desconectara tambien la Sheet actual y tendras que volver a iniciar sesion.")) {
       clearToken();
-      disconnect();
+      localStorage.removeItem("last_sheet_url");
+      logoutGoogle();
       window.location.href = "/onboarding";
     }
   }
@@ -87,6 +93,17 @@ export default function PreferenciasPage() {
                 </a>
               )}
 
+              {lastConnectedAt && (
+                <p className="text-xs text-muted-foreground">
+                  Conectada el {new Date(lastConnectedAt).toLocaleString("es-ES")}
+                </p>
+              )}
+              {templateVersion && (
+                <p className="text-xs text-muted-foreground">
+                  Version de plantilla: {templateVersion}
+                </p>
+              )}
+
               <div className="grid grid-cols-2 gap-2">
                 <Button
                   variant="outline"
@@ -108,6 +125,10 @@ export default function PreferenciasPage() {
                 </Button>
               </div>
 
+              <p className="text-xs text-muted-foreground">
+                Cambiar o desconectar la Sheet no cierra tu sesion de Google.
+              </p>
+
               <Button
                 variant="destructive"
                 size="sm"
@@ -117,6 +138,10 @@ export default function PreferenciasPage() {
                 <LogOut className="h-4 w-4" />
                 Cerrar sesion de Google
               </Button>
+
+              <p className="text-xs text-muted-foreground">
+                Al cerrar sesion de Google tambien se desconecta la Sheet actual.
+              </p>
             </CardContent>
           </Card>
         )}
@@ -138,7 +163,11 @@ export default function PreferenciasPage() {
               <Button
                 className="w-full mt-3 gap-2"
                 onClick={() => {
-                  window.location.href = "/onboarding";
+                  if (getToken()) {
+                    window.location.href = "/onboarding?step=sheet";
+                  } else {
+                    window.location.href = "/onboarding?error=auth_required";
+                  }
                 }}
               >
                 <LinkIcon className="h-4 w-4" />

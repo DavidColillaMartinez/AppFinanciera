@@ -182,7 +182,10 @@ not be mixed with normal spending.
 
 - Destinations: emergency fund, safety cushion, reserves, goals, future payments,
   investment fund, personal wants.
-- The app stores historical contributions and withdrawals for multi-year savings.
+- The app stores historical contributions and withdrawals in the
+  `Mov_reservas` ledger (see §6). The manual `saldoActual` / `saldoReservado`
+  fields on the parent rows are kept for backward compatibility; the engine
+  prefers the ledger when it has entries for a target.
 
 ### 5.1 General savings (dashboard card)
 
@@ -194,23 +197,78 @@ not be mixed with normal spending.
 
 - Planned for this month, saved so far, distribution across reserves, goals and
   future payments, completion status.
+- "Ahorro del mes" no longer creates a generic `Ahorro` movement; the monthly
+  confirmation flow writes ledger rows directly (see §5.3).
 
-### 5.3 Monthly saving confirmation
+### 5.3 Monthly saving confirmation (implemented Phase 7)
 
-A "Mark this month's saving as done" flow must exist. The same monthly saving
-must not be confirmed twice unless the user explicitly edits / reverts it.
+- Screen: `/savings/monthly` (reachable from `/savings` and from the dashboard
+  savings panel).
+- The user picks a month. The app lists every active target (reserve, goal,
+  future payment) with a non-zero `aporteMensual*` field.
+- Each row shows the planned amount; the user can edit the amount inline and
+  confirm. "Confirmar todos los pendientes" performs the bulk action.
+- "Desconfirmar" soft-deletes the monthly row and re-runs the dashboard.
+- IDs are deterministic per `(monthKey, tipoDestino, destinoId)` to make
+  confirmation idempotent.
 
-## 6. `Mov_reservas` ledger
+## 6. `Mov_reservas` ledger (implemented Phase 7)
 
-- The official savings ledger. Phase 7 makes it the source of truth for balances.
+- The official savings ledger. Source of truth for `Reservas.saldoActual`,
+  `Objetivos.saldoActual` and `Pagos_futuros.saldoReservado`.
 - Fields: `id`, `fecha`, `mesClave`, `tipoDestino`, `destinoId`, `reservaId`,
   `tipoMovimiento`, `importe`, `cuentaOrigen`, `cuentaDestino`, `notas`,
   `createdAt`, `updatedAt`.
 - `tipoDestino` ∈ `reserva | objetivo | pago_futuro`.
 - `tipoMovimiento` ∈ `aporte | retirada`.
+- Soft-deletes use `tipoMovimiento = "Eliminado"` (sentinel). The engine
+  detects the sentinel **before** normalizing into `aporte | retirada`, so
+  soft-deleted rows are never counted as active savings. The normalization
+  step is the only place that owns the mapping.
 - The engine prefers the ledger and falls back to the manual `saldoActual` /
   `saldoReservado` field for backward compatibility.
-- Phase 7 redirect: all contribution / withdrawal flows write here.
+
+### 6.1 ID conventions
+
+```
+One-off aporte reserve:  LEDGER-CONTRIB-reserva-YYYY-MM-<reservaId>-<timestamp>
+One-off aporte goal:     LEDGER-CONTRIB-objetivo-YYYY-MM-<objetivoId>-<timestamp>
+One-off aporte pago:     LEDGER-CONTRIB-pago_futuro-YYYY-MM-<pagoId>-<timestamp>
+One-off retirada:        LEDGER-WITHDRAW-<tipoDestino>-YYYY-MM-<destinoId>-<timestamp>
+Monthly planned saving:  LEDGER-MONTHLY-YYYY-MM-<tipoDestino>-<destinoId>
+```
+
+- One-off contributions and withdrawals use timestamp-based IDs (no duplicate
+  prevention needed because the timestamp is unique per click).
+- Monthly planned savings use deterministic IDs; saving twice updates the same
+  row instead of duplicating.
+- `isLedgerEntry(m)` matches `id.startsWith("LEDGER-")`. Used by
+  `getMonthlySavings` to exclude ledger audit rows from the generic `Ahorro`
+  bucket and prevent double counting.
+
+### 6.2 Reads and writes
+
+- Pure helpers in `src/lib/finance/savings-ledger.ts`:
+  `buildContributionId`, `buildWithdrawalId`, `buildMonthlyPlannedSavingId`,
+  `isLedgerEntry`, `isMonthlyPlannedSavingId`, `getEntriesForTarget`,
+  `getEntriesForMonth`, `getEntriesForTargetAndMonth`, `calculateLedgerBalance`,
+  `calculateLedgerMonthlyTotal`, `calculateLedgerBreakdownByMonth`,
+  `hasMonthlyPlannedSaving`, `getActiveMovements`, `normalizeTipoMovimiento`,
+  `normalizeTipoDestino`, `rowToReserveMovement`.
+- Service functions in `src/lib/finance/savings-ledger.ts`:
+  `readAllReserveMovements`, `createSavingsContribution`,
+  `createSavingsWithdrawal`, `confirmMonthlyPlannedSaving`,
+  `unconfirmMonthlyPlannedSaving`, `updateReserveMovement`,
+  `softDeleteReserveMovement`.
+- React Query hooks in `src/features/savings/hooks/use-savings.ts`:
+  `useAllReserveMovements`, `useTargetReserveMovements`,
+  `useCreateSavingsContribution`, `useCreateSavingsWithdrawal`,
+  `useConfirmMonthlyPlannedSaving`, `useUnconfirmMonthlyPlannedSaving`,
+  `useUpdateReserveMovement`, `useDeleteReserveMovement`,
+  `useMonthlySavingStatus`, `usePlannedMonthlyTargets`,
+  `useTargetBalances`, `useTargetBalance`.
+- A generic contribution form (`SavingsMovementForm`) is used for reserves,
+  goals and future payments, picking the right `tipoDestino`.
 
 ## 7. Accounts model
 
@@ -237,15 +295,22 @@ available = income
           − plannedSavings
 ```
 
-- `plannedSavings = max(0, (income − variableExpenses − fixedConfirmed
-  − fixedPending − deferred) × 0.2)`. The 20% rate is a placeholder; a
-  user-configurable savings goal will replace it in a later phase.
+- `plannedSavings` is the user's real monthly plan: the sum of
+  `Reservas.aporteMensualSugerido + Objetivos.aporteMensual` from active
+  rows. `Pagos_futuros.aporteMensual` is **not** included here because it is
+  already represented by `futurePaymentProvisions`. This avoids double
+  counting the same target.
+- If the user has no active reserves/goals with a monthly plan, the engine
+  falls back to a 20% recommendation of `(income − variable − fixedConfirmed
+  − fixedPending − deferred)`. The breakdown flags
+  `plannedSavingsIsFallback: true` so the UI can label it as "Ahorro
+  recomendado (20% fallback)" instead of "Ahorro planificado".
 - The `Disponible` card must be clickable and reveal the breakdown behind the
   number (`explainAvailableBalance`).
 - Pending fixed obligations are still part of the formula (the user must know
   they are committed money).
 
-## 9. Dashboard metrics
+## 9. Dashboard metrics (implemented Phase 8)
 
 The dashboard must show at least:
 
@@ -259,39 +324,154 @@ The dashboard must show at least:
 - Future payment provisions
 - Month status
 
-Interactions:
+The dashboard consumes the engine via `useFinanceSummary({ monthKey })`. It does
+**not** recompute any financial formula locally. All cards read from
+`summary.available`, `summary.savings`, `summary.monthlySavings` and
+`getSavingsBreakdown(ctx)`.
 
-- `Disponible` → opens the calculation breakdown.
-- `Ingresos` → `/transactions?filterType=Ingreso`.
-- `Gastos` → `/transactions?filterType=Gasto`.
-- `Ahorro general` → breakdown by reserve, goal and future payment.
-- `Ahorro del mes` → distribution for the selected month.
+### 9.1 Card interactions
 
-## 10. Forms and movements
+- `Disponible` → opens `DisponibleExplanationModal` (engine result
+  `available` with `explanation[]`). The modal groups lines by
+  `income / expense / saving / provision / adjustment` and shows the
+  warnings (salary not configured, pending fixed expenses).
+- `Ingresos` → `/transactions?filterType=Ingreso&month=YYYY-MM`.
+- `Gastos` → `/transactions?filterType=Gasto&month=YYYY-MM`.
+- `Ahorro general` → opens `GeneralSavingsBreakdownModal`. Reads
+  `getSavingsBreakdown(ctx)` (reserves + goals + future payments) and shows
+  the per-target progress and totals.
+- `Ahorro del mes` → opens `MonthlySavingsBreakdownModal`. Reads
+  `summary.monthlySavings` (filtering by `mesClave` and the
+  `isLedgerEntry` guard). Shows by-destination breakdown and the
+  individual ledger rows of the month.
+- `Total obligaciones` → non-clickable card showing
+  `variable + fixedConfirmed + fixedPending + deferred + futureProvisions`
+  (the engine components that reduce spendable money). Replaces the old
+  misleading "Total gastos" card.
 
-- `Ingreso` requires `cuentaDestino`. No `metodo`.
-- `Gasto` requires `cuentaOrigen` and `metodo` from the fixed selector.
-- `Transferencia interna` requires `cuentaOrigen` and `cuentaDestino`.
-- `Ahorro` requires a destination reserve / goal / future payment (general fallback
-  allowed). Phase 9 enforces this at the Zod level.
-- Payment method is a fixed selector: `Tarjeta / Efectivo / Bizum / Transferencia
-  / Domiciliación / Otro`. (To be confirmed or narrowed in Phase 9.)
-- `/transactions?filterType=Ingreso|Gasto` must apply the filter at the hook
-  level. (Phase 9.)
+### 9.2 Transactions page filters (implemented Phase 8)
 
-## 11. Google session and Sheet connection
+- `/transactions` reads `filterType` and `month` from the URL and applies
+  them on mount. A banner shows which filters came from the dashboard and
+  offers a "Limpiar" action that strips the query params.
+- Unknown or invalid `filterType` values are ignored. Months are validated
+  against the `YYYY-MM` regex.
+- The page is wrapped in `<Suspense>` because `useSearchParams` requires it
+  in Next.js 16.
 
-These are two separate states.
+## 10. Forms and movements (implemented Phase 9)
 
-- Google token expiry:
-  - clear the invalid token;
-  - keep the saved `sheetId` / `sheetUrl` if possible;
-  - trigger a fresh Google login;
-  - restore the Sheet connection once the user logs in again.
-- "Disconnect Sheet" → clears the Sheet connection, keeps Google auth.
-- "Logout Google" → clears the token and the Sheet connection.
-- Changing the Sheet must not log the user out from Google.
-- Implementation details live in Phase 10.
+- `Ingreso` requires `cuentaDestino`. No `metodo` is shown or saved (the
+  column is left empty). `metodo` is auto-cleared when the user switches to
+  the income type.
+- `Gasto` requires `cuentaOrigen`, `metodo` (selector) and a category
+  compatible with `tipoHabitual = Gasto`.
+- `Transferencia interna` requires `cuentaOrigen` and `cuentaDestino` and
+  rejects same-account transfers. `metodo` is auto-set to `Transferencia`.
+- `Ahorro` is **not** a valid type in the form. If a caller passes
+  `defaultType = "Ahorro"`, the form opens a banner that points to
+  `/savings/monthly`. The dashboard FAB and the `/transactions` page
+  redirect "Ahorro" to `/savings/monthly` directly. Generic `Ahorro`
+  movements are kept for legacy/audit but are excluded from
+  `getMonthlySavings` via the `LEDGER-` id guard.
+- Categories are filtered by `tipoHabitual` so an income form only shows
+  income categories and an expense form only shows expense categories.
+- Accounts are loaded from the sheet (`useAccounts`). If the list is empty,
+  the form shows an inline empty state with a link to `/accounts`.
+- Payment method is a fixed selector: `Tarjeta / Efectivo / Bizum /
+  Transferencia / Domiciliación / Otro`. `normalizePaymentMethod` in
+  `src/constants/payment-methods.ts` maps old/informal values to the
+  canonical label (case-insensitive) and falls back to `Otro` only for
+  truly unknown values. The hook writes the normalized value.
+- `/transactions?filterType=Ingreso|Gasto|Ahorro|Transferencia%20interna&month=YYYY-MM`
+  applies the filter via `useSearchParams`. A banner shows active filters
+  with a "Limpiar" action that strips the query params.
+
+## 11. Google session and Sheet connection (implemented Phase 10)
+
+These are two separate states and are persisted / cleared independently.
+
+### 11.1 State model
+
+- **Google session** (`googleSession`):
+  - Token lives in `sessionStorage` under `google_access_token`.
+  - Survives reloads of the same tab, dies on tab close.
+  - Never written to `localStorage` or any long-lived store.
+  - `useAppStore.authStatus` mirrors the in-memory state
+    (`unknown | authenticated | expired | missing`) for UI purposes.
+- **Sheet connection** (`sheetConnection`):
+  - Persisted in `zustand` `persist` middleware: `spreadsheetId`,
+    `sheetUrl`, `templateVersion`, `appMinVersion`, `lastConnectedAt`.
+  - Source of truth: the connected Google Sheet. The app keeps the
+    metadata in storage so it can re-validate and pre-fill the form on
+    reopen.
+  - `localStorage.last_sheet_url` mirrors `sheetUrl` for the prefill
+    input. It is treated as a cache, not a source of truth: the store
+    wins when both exist.
+
+### 11.2 Token expiration recovery
+
+- The Sheets client (`src/lib/sheets/client.ts`) wraps every request in
+  `unwrapAuth`. When Google returns 401 or 403:
+  1. `clearToken()` removes the bad token from `sessionStorage`.
+  2. A `appfinanzas:auth-expired` custom event is dispatched.
+  3. A `SheetsAuthError` is thrown to the caller.
+- `client-layout.tsx` listens to that event and redirects to
+  `/onboarding?error=auth_failed&step=google`. The user does not need
+  to clear browser data.
+- React Query's `retry` callback short-circuits on `SheetsAuthError`
+  (`src/lib/query-client.ts`). No infinite loops.
+- The "Re-conectar" / "Iniciar sesion" buttons trigger a real full
+  Google OAuth flow via `/auth/google` → Google →
+  `/auth/callback?#access_token=...` → store token → redirect.
+- After successful login the callback redirects to `/` if a Sheet is
+  still connected, or to `/onboarding?step=sheet` to reconnect one.
+
+### 11.3 Disconnect Sheet (keeps Google session)
+
+- Trigger: "Desconectar" in `/settings/preferencias`.
+- Action: `useAppStore.disconnect()` clears `sheetId`, `sheetUrl`,
+  `templateVersion`, `appMinVersion`, `lastConnectedAt`. The token in
+  `sessionStorage` is NOT touched. `localStorage.last_sheet_url` is
+  removed.
+- Result: the user lands on `/onboarding?step=sheet` and can paste a
+  new URL without re-authenticating with Google.
+
+### 11.4 Logout from Google (clears session AND Sheet)
+
+- Trigger: "Cerrar sesion de Google" in `/settings/preferencias`.
+- Action: `clearToken()` + `useAppStore.logoutGoogle()` (which clears
+  Sheet state and `authStatus`) + `localStorage.removeItem("last_sheet_url")`.
+- Result: full reset. The user lands on `/onboarding` step 1
+  (Google login) with no prefilled Sheet.
+
+### 11.5 Change Sheet (no logout)
+
+- Trigger: "Cambiar Sheet" in `/settings/preferencias`.
+- Action: `disconnect()` (same as 11.3) without touching the token.
+  `localStorage.last_sheet_url` is removed so the user can paste a new
+  URL. After validating, the new Sheet is stored and `lastConnectedAt`
+  is updated.
+
+### 11.6 Reopen the app
+
+- `zustand` rehydrates `sheetConnection` from `localStorage`
+  automatically (storage key `app_finanzas_state`, version 3).
+- `client-layout.tsx` checks `hasToken()`:
+  - if missing and a `sheetId` was restored → redirect to
+    `/onboarding?error=auth_failed&step=google`;
+  - if missing and no `sheetId` → redirect to
+    `/onboarding?error=auth_required`;
+  - if present and `isConnected` is false → redirect to
+    `/onboarding?step=sheet` (prefill from `last_sheet_url`).
+- The onboarding form pre-fills the URL field from
+  `localStorage.last_sheet_url` and shows a "Ultima Sheet conectada"
+  card with a "Reutilizar" button.
+
+### 11.7 What is NOT stored
+
+- The Google access token is never written to `localStorage` or
+  persisted in `zustand`. Only the non-sensitive Sheet metadata is.
 
 ## 12. Template validation
 
@@ -335,24 +515,15 @@ required structure is present. Visual formatting is irrelevant.
 - Phase 4 — central finance engine — **implemented**.
 - Phase 5 — salary / payroll — **implemented**.
 - Phase 6 — fixed expenses monthly confirmation — **implemented**.
-- Phase 7 — `Mov_reservas` savings ledger — **pending (next critical phase)**.
-- Phase 8 — dashboard metrics using the engine — pending.
-- Phase 9 — forms and movement flows — pending.
-- Phase 10 — Google session and Sheet connection recovery — pending.
+- Phase 7 — `Mov_reservas` savings ledger — **implemented**.
+- Phase 8 — dashboard metrics using the engine — **implemented**.
+- Phase 8.5 — critical post-dashboard fixes — **implemented**.
+- Phase 9 — forms and movement flows — **implemented**.
+- Phase 10 — Google session and Sheet connection recovery — **implemented**.
 - Phase 11 — UI / design polish — pending.
 
 Full phase details, files touched and conventions: `docs/FINANCE_IMPLEMENTATION.md`.
 
 ## 15. Next phase pointer
 
-**Phase 7 — Savings ledger / `Mov_reservas`.**
-
-Pending goals:
-
-- make `Mov_reservas` the official savings ledger;
-- stop using generic `Ahorro` movements as the main saving truth;
-- support contributions and withdrawals (`aporte | retirada`);
-- support `tipoDestino = reserva | objetivo | pago_futuro`;
-- derive balances from the ledger when possible;
-- update reserve, goal and future payment flows to write ledger rows;
-- prepare the dashboard for general savings and monthly savings.
+**Phase 11 — UI / design polish.**
