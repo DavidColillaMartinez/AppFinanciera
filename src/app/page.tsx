@@ -1,17 +1,9 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
-import { useTransactions } from "@/features/transactions/hooks/use-transactions";
-import { useCategories } from "@/features/categories/hooks/use-categories";
-import { useAccounts } from "@/features/accounts/hooks/use-accounts";
-import { useFixedExpenses } from "@/features/fixed-expenses/hooks/use-fixed-expenses";
-import { useFuturePayments } from "@/features/future-payments/hooks/use-future-payments";
-import { useDeferredPayments } from "@/features/deferred-payments/hooks/use-deferred-payments";
-import { useAppStore } from "@/stores/app-store";
-import { LoadingState } from "@/components/states/loading-state";
-import { ErrorState } from "@/components/states/error-state";
-import { Button } from "@/components/ui/button";
+import { useState, useMemo, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import {
   TrendingUp,
   TrendingDown,
@@ -24,6 +16,10 @@ import {
   Calendar,
   Settings,
   Receipt,
+  ListChecks,
+  Target,
+  CalendarCheck,
+  AlertTriangle,
 } from "lucide-react";
 import {
   Dialog,
@@ -33,37 +29,39 @@ import {
 } from "@/components/ui/dialog";
 import { TransactionForm } from "@/features/transactions/components/transaction-form";
 import { DashboardCustomizer } from "@/components/dashboard/dashboard-customizer";
-import { SavingsPanelExpanded } from "@/components/dashboard/savings-panel-expanded";
 import {
   useWidgetReorder,
   ReorderOverlay,
 } from "@/components/dashboard/widget-reorder";
 import { ChartRenderer } from "@/components/dashboard/chart-renderer";
+import { DisponibleExplanationModal } from "@/components/dashboard/disponible-explanation-modal";
+import { GeneralSavingsBreakdownModal } from "@/components/dashboard/general-savings-breakdown-modal";
+import { MonthlySavingsBreakdownModal } from "@/components/dashboard/monthly-savings-breakdown-modal";
 import { TransactionType } from "@/constants/enums";
 import { cn } from "@/lib/utils";
-import {
-  calculateExpensesByCategory,
-} from "@/lib/finance/calculations";
-import { ensureSalaryForMonth, buildSalaryMovementId } from "@/lib/finance/salary";
-import { useSalaryConfig } from "@/features/salary/hooks/use-salary";
-import { useEnsureSalaryForMonth } from "@/features/salary/hooks/use-salary";
+import { buildSalaryMovementId } from "@/lib/finance/salary";
+import { useSalaryConfig, useEnsureSalaryForMonth } from "@/features/salary/hooks/use-salary";
+import { useFinanceSummary } from "@/hooks/use-finance-summary";
+import { useAppStore } from "@/stores/app-store";
+import { useCategories } from "@/features/categories/hooks/use-categories";
+import { useAccounts } from "@/features/accounts/hooks/use-accounts";
+import { useFixedExpenses } from "@/features/fixed-expenses/hooks/use-fixed-expenses";
+import { useFuturePayments } from "@/features/future-payments/hooks/use-future-payments";
+import { useReserves } from "@/features/reserves/hooks/use-reserves";
+import { useGoals } from "@/features/goals/hooks/use-goals";
+import { useTransactions } from "@/features/transactions/hooks/use-transactions";
+import { calculateExpensesByCategory } from "@/lib/finance/calculations";
 import { generateMonthKey } from "@/lib/sheets/adapters";
-import {
-  PieChart,
-  Pie,
-  Cell,
-  Tooltip,
-  ResponsiveContainer,
-  Legend,
-} from "recharts";
-import { useRouter } from "next/navigation";
+import { LoadingState } from "@/components/states/loading-state";
+import { ErrorState } from "@/components/states/error-state";
+import { EmptyState } from "@/components/states/empty-state";
 
 const MONTH_NAMES = [
   "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
   "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
 ];
 
-const COLORS = [
+const CHART_COLORS = [
   "#3B82F6",
   "#10B981",
   "#F59E0B",
@@ -74,6 +72,19 @@ const COLORS = [
   "#84CC16",
 ];
 
+interface MetricCardProps {
+  title: string;
+  value: string;
+  icon: typeof Wallet;
+  colorClass: string;
+  bgClass: string;
+  delay: number;
+  onClick?: () => void;
+  isActive?: boolean;
+  subtitle?: string;
+  disabled?: boolean;
+}
+
 function MetricCard({
   title,
   value,
@@ -83,25 +94,28 @@ function MetricCard({
   delay,
   onClick,
   isActive,
-}: {
-  title: string;
-  value: string;
-  icon: typeof Wallet;
-  colorClass: string;
-  bgClass: string;
-  delay: number;
-  onClick?: () => void;
-  isActive?: boolean;
-}) {
+  subtitle,
+  disabled,
+}: MetricCardProps) {
   return (
     <Card
       className={cn(
         "overflow-hidden animate-fade-in transition-all",
         bgClass,
-        onClick && "cursor-pointer hover:shadow-md active:scale-[0.98]"
+        onClick && !disabled && "cursor-pointer hover:shadow-md active:scale-[0.98]",
+        disabled && "opacity-60 cursor-not-allowed",
       )}
       style={{ animationDelay: `${delay}ms` }}
-      onClick={onClick}
+      onClick={disabled ? undefined : onClick}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={(e) => {
+        if (disabled || !onClick) return;
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onClick();
+        }
+      }}
     >
       <CardContent className="p-4">
         <div className="flex items-start justify-between">
@@ -111,15 +125,20 @@ function MetricCard({
                 {title}
               </p>
               {isActive !== undefined && (
-                <span className={cn(
-                  "w-2 h-2 rounded-full",
-                  isActive ? "bg-green-500" : "bg-muted-foreground/30"
-                )} />
+                <span
+                  className={cn(
+                    "w-2 h-2 rounded-full",
+                    isActive ? "bg-green-500" : "bg-muted-foreground/30",
+                  )}
+                />
               )}
             </div>
             <p className={cn("text-2xl font-bold tracking-tight", colorClass)}>
               {value}
             </p>
+            {subtitle && (
+              <p className="text-xs text-muted-foreground">{subtitle}</p>
+            )}
           </div>
           <div
             className={cn(
@@ -137,13 +156,7 @@ function MetricCard({
 
 export default function VistaMesPage() {
   const router = useRouter();
-  const {
-    sheetId,
-    dashboardConfig,
-    monthlyIncome,
-    incomeType,
-    addSalaryMonth,
-  } = useAppStore();
+  const { sheetId, dashboardConfig, addSalaryMonth } = useAppStore();
   const [selectedMonth, setSelectedMonth] = useState(
     new Date().toISOString().slice(0, 7),
   );
@@ -152,14 +165,14 @@ export default function VistaMesPage() {
   const [showCustomizer, setShowCustomizer] = useState(false);
   const [selectedType, setSelectedType] = useState<TransactionType | null>(null);
   const [salaryAutoAdded, setSalaryAutoAdded] = useState(false);
-  const [savingsExpanded, setSavingsExpanded] = useState(false);
+  const [showDisponibleModal, setShowDisponibleModal] = useState(false);
+  const [showGeneralSavingsModal, setShowGeneralSavingsModal] = useState(false);
+  const [showMonthlySavingsModal, setShowMonthlySavingsModal] = useState(false);
 
   const widgets = dashboardConfig.widgets;
   const isVisible = (id: string) => widgets.find((w) => w.id === id)?.visible ?? true;
 
-  const {
-    reorderWidgets,
-  } = useAppStore();
+  const { reorderWidgets } = useAppStore();
   const {
     isReorderMode,
     enterReorderMode,
@@ -172,33 +185,38 @@ export default function VistaMesPage() {
     reorderWidgets(from, to);
   });
 
+  const { summary, isLoading, isError } = useFinanceSummary({ monthKey: selectedMonth });
   const {
     data: transactions,
-    isLoading,
-    isError,
-    error,
     refetch: refetchTransactions,
   } = useTransactions(sheetId, selectedMonth);
   const { data: categories } = useCategories(sheetId);
   const { data: accounts } = useAccounts(sheetId);
   const { data: fixedExpenses } = useFixedExpenses(sheetId);
   const { data: futurePayments } = useFuturePayments(sheetId);
-  const { data: deferredPayments } = useDeferredPayments(sheetId);
+  const { data: reserves } = useReserves(sheetId);
+  const { data: goals } = useGoals(sheetId);
   const { data: salaryConfig } = useSalaryConfig(sheetId);
   const ensureSalary = useEnsureSalaryForMonth(sheetId);
+
+  const [year, month] = selectedMonth.split("-").map(Number);
+  const monthName = MONTH_NAMES[(month ?? 1) - 1] ?? "";
+  const currentMonth = useMemo(() => generateMonthKey(new Date().toISOString()), []);
+  const isCurrentMonth = selectedMonth === currentMonth;
+  const isSalaryConfigured = Boolean(
+    salaryConfig && salaryConfig.enabled && salaryConfig.fixedAmount > 0,
+  );
 
   useEffect(() => {
     if (!sheetId || !salaryConfig) return;
     if (!salaryConfig.enabled) return;
     if (salaryConfig.type !== "fixed") return;
-    if (selectedMonth !== generateMonthKey(new Date().toISOString())) return;
-
+    if (!isCurrentMonth) return;
     const salaryMovementId = buildSalaryMovementId(selectedMonth);
     const alreadyPresent = (transactions ?? []).some(
       (t) => t.id === salaryMovementId,
     );
     if (alreadyPresent) return;
-
     let cancelled = false;
     async function addSalary() {
       if (cancelled || !sheetId || !salaryConfig) return;
@@ -223,6 +241,7 @@ export default function VistaMesPage() {
   }, [
     sheetId,
     salaryConfig,
+    isCurrentMonth,
     selectedMonth,
     transactions,
     ensureSalary,
@@ -230,99 +249,78 @@ export default function VistaMesPage() {
     refetchTransactions,
   ]);
 
-  const filteredTransactions = useMemo(
-    () => transactions ?? [],
-    [transactions],
-  );
+  const available = summary.available;
+  const savingsSummary = summary.savings;
+  const monthlySavings = summary.monthlySavings;
 
-  const totalIncome = useMemo(() => {
-    const transactionsIncome = filteredTransactions
-      .filter((t) => t.tipo === "Ingreso")
-      .reduce((acc, t) => acc + t.importe, 0);
-    return transactionsIncome;
-  }, [filteredTransactions]);
-
-  const totalExpenses = useMemo(
+  const variableExpenses = summary.variableExpenses;
+  const fixedExpensesTotal = summary.fixedExpensesTotal;
+  const deferredPaymentsTotal = available.deferredPayments;
+  const futureProvisions = summary.futurePaymentProvisions;
+  const totalObligations = useMemo(
     () =>
-      filteredTransactions
-        .filter((t) => t.tipo === "Gasto")
-        .reduce((acc, t) => acc + t.importe, 0),
-    [filteredTransactions],
+      variableExpenses +
+      fixedExpensesTotal +
+      deferredPaymentsTotal +
+      futureProvisions,
+    [variableExpenses, fixedExpensesTotal, deferredPaymentsTotal, futureProvisions],
   );
-
-  const userSavingsThisMonth = useMemo(
-    () =>
-      filteredTransactions
-        .filter((t) => t.tipo === "Ahorro")
-        .reduce((acc, t) => acc + t.importe, 0),
-    [filteredTransactions],
-  );
-
-  const fixedMonthly = useMemo(() => {
-    return (fixedExpenses ?? []).reduce((acc, exp) => {
-      if (exp.frecuencia === "Mensual") return acc + exp.importe;
-      if (exp.frecuencia === "Trimestral") return acc + exp.importe / 3;
-      if (exp.frecuencia === "Anual") return acc + exp.importe / 12;
-      return acc;
-    }, 0);
-  }, [fixedExpenses]);
-
-  const deferredMonthly = useMemo(() => {
-    return (deferredPayments ?? [])
-      .filter((p) => p.estado === "Activo")
-      .reduce((acc, p) => acc + p.cuotaMensual, 0);
-  }, [deferredPayments]);
-
-  const futureMonthly = useMemo(() => {
-    return (futurePayments ?? [])
-      .filter((p) => p.activo === "S")
-      .reduce((acc, p) => acc + p.aporteMensual, 0);
-  }, [futurePayments]);
-
-  const totalExpensesWithFixed = fixedMonthly + deferredMonthly + futureMonthly + totalExpenses;
-
-  const availableBalance = totalIncome - totalExpensesWithFixed - userSavingsThisMonth;
 
   const expensesByCategory = useMemo(() => {
-    const byCategory = calculateExpensesByCategory(
-      filteredTransactions.filter((t) => t.tipo === "Gasto"),
-      categories ?? [],
-    );
+    const filtered = (transactions ?? []).filter((t) => t.tipo === "Gasto");
+    const byCategory = calculateExpensesByCategory(filtered, categories ?? []);
     return byCategory.map((item, i) => ({
       name: item.categoryName || item.category,
       value: item.total,
-      color: COLORS[i % COLORS.length],
+      color: CHART_COLORS[i % CHART_COLORS.length],
     }));
-  }, [filteredTransactions, categories]);
+  }, [transactions, categories]);
 
-  const savingsPlanData = useMemo(() => {
-    const baseIncome = totalIncome > 0 ? totalIncome : monthlyIncome;
-    if (baseIncome === 0) return null;
-    const netForMonth = baseIncome - totalExpensesWithFixed;
-    const suggestedSavings = Math.max(0, netForMonth * 0.2);
-    const discretionaryBudget = netForMonth - suggestedSavings;
-    return {
-      baseIncome,
-      totalFixed: totalExpensesWithFixed,
-      netForMonth,
-      suggestedSavings,
-      discretionaryBudget,
-      savingsRate: 20,
-    };
-  }, [totalIncome, monthlyIncome, totalExpensesWithFixed]);
+  const breakdown = summary?.savingsBreakdown ?? { reserves: [], goals: [], futurePayments: [] };
 
-  const chartData = useMemo(() => {
-    const activeCharts = (dashboardConfig.charts ?? []).filter((c) => c.dataSource === "categories");
-    if (activeCharts.length > 0) return expensesByCategory;
-    return expensesByCategory;
-  }, [dashboardConfig.charts, expensesByCategory]);
+  const targetNameById = useCallback(
+    (tipoDestino: string, destinoId: string): string | null => {
+      if (tipoDestino === "reserva") {
+        return reserves?.find((r) => r.reservaId === destinoId)?.nombre ?? null;
+      }
+      if (tipoDestino === "objetivo") {
+        return goals?.find((g) => g.objetivoId === destinoId)?.nombre ?? null;
+      }
+      if (tipoDestino === "pago_futuro") {
+        return futurePayments?.find((f) => f.pagoId === destinoId)?.concepto ?? null;
+      }
+      return null;
+    },
+    [reserves, goals, futurePayments],
+  );
 
   const recentTransactions = useMemo(() => {
-    return filteredTransactions.slice(0, 5);
-  }, [filteredTransactions]);
+    return (transactions ?? []).slice(0, 5);
+  }, [transactions]);
 
-  const [year, month] = selectedMonth.split("-").map(Number);
-  const monthName = MONTH_NAMES[month - 1] ?? "";
+  const savingsBreakdownHasAny = useMemo(
+    () =>
+      (breakdown.reserves.length ?? 0) +
+        (breakdown.goals.length ?? 0) +
+        (breakdown.futurePayments.length ?? 0) >
+      0,
+    [breakdown],
+  );
+
+  const pendingFixedCount = useMemo(
+    () =>
+      (fixedExpenses ?? []).filter(
+        (f) =>
+          f.activo === "S" &&
+          (f.frecuencia === "Mensual" ||
+            f.frecuencia === "Trimestral" ||
+            f.frecuencia === "Anual" ||
+            f.frecuencia === "Unico"),
+      ).length - available.fixedExpensesConfirmed,
+    [fixedExpenses, available.fixedExpensesConfirmed],
+  );
+
+  const monthlySavingsHasAny = monthlySavings.totalForMonth > 0 || monthlySavings.planned > 0;
 
   function handleAddType(type: TransactionType) {
     setSelectedType(type);
@@ -331,31 +329,62 @@ export default function VistaMesPage() {
   }
 
   function handleIncomeClick() {
-    router.push("/transactions?filterType=Ingreso");
+    router.push(`/transactions?filterType=${TransactionType.INGRESO}&month=${selectedMonth}`);
   }
 
   function handleExpensesClick() {
-    router.push("/transactions?filterType=Gasto");
+    router.push(`/transactions?filterType=${TransactionType.GASTO}&month=${selectedMonth}`);
   }
 
-  function handleSavingsClick() {
-    setSavingsExpanded(!savingsExpanded);
+  function handleDisponibleClick() {
+    setShowDisponibleModal(true);
   }
 
-  if (isLoading) return <LoadingState message="Cargando vista del mes..." />;
-  if (isError)
+  function handleGeneralSavingsClick() {
+    setShowGeneralSavingsModal(true);
+  }
+
+  function handleMonthlySavingsClick() {
+    setShowMonthlySavingsModal(true);
+  }
+
+  if (!sheetId) {
     return (
-      <ErrorState message={(error as Error)?.message ?? "Error al cargar"} />
+      <div className="px-4 py-6 space-y-4">
+        <EmptyState
+          title="Sin hoja conectada"
+          description="Conecta una Google Sheet para ver tu vista del mes."
+          type="empty"
+          action={{
+            label: "Conectar hoja",
+            onClick: () => router.push("/onboarding"),
+          }}
+        />
+      </div>
     );
+  }
+
+  if (isLoading && transactions === undefined) {
+    return <LoadingState message="Cargando vista del mes..." />;
+  }
+
+  if (isError) {
+    return (
+      <ErrorState
+        message="No se pudo cargar la información del mes. Revisa tu conexión a Google."
+      />
+    );
+  }
+
+  const chart = dashboardConfig.charts?.[0];
+  const hasChart = isVisible("chart") && chart;
 
   return (
     <div className="px-4 py-6 space-y-6 pb-32">
       <div className="space-y-1">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm text-muted-foreground">
-              {new Date().getFullYear()}
-            </p>
+            <p className="text-sm text-muted-foreground">{year}</p>
             <h1 className="text-4xl font-bold tracking-tight text-foreground">
               {monthName}
             </h1>
@@ -383,185 +412,119 @@ export default function VistaMesPage() {
       <div className="space-y-3">
         <MetricCard
           title="Disponible"
-          value={`${availableBalance >= 0 ? "+" : ""}${availableBalance.toFixed(2)}`}
+          value={`${available.available >= 0 ? "+" : ""}${available.available.toFixed(2)}`}
           icon={Wallet}
-          colorClass={availableBalance >= 0 ? "text-income" : "text-expense"}
-          bgClass={availableBalance >= 0 ? "card-income" : "card-expense"}
+          colorClass={available.available >= 0 ? "text-income" : "text-expense"}
+          bgClass={available.available >= 0 ? "card-income" : "card-expense"}
           delay={0}
+          onClick={handleDisponibleClick}
+          subtitle="Toca para ver el detalle"
         />
         <div className="grid grid-cols-2 gap-3">
           <MetricCard
             title="Ingresos"
-            value={`+${totalIncome.toFixed(2)}`}
+            value={`+${available.income.toFixed(2)}`}
             icon={TrendingUp}
             colorClass="text-income"
             bgClass="card-income"
             delay={100}
             onClick={handleIncomeClick}
+            subtitle={
+              available.salaryIncome > 0 && available.extraIncome > 0
+                ? `Nomina + extras`
+                : available.salaryIncome > 0
+                  ? "Nomina"
+                  : "Extras"
+            }
           />
           <MetricCard
-            title="Gastos"
-            value={`-${totalExpenses.toFixed(2)}`}
+            title="Gastos variables"
+            value={`-${variableExpenses.toFixed(2)}`}
             icon={TrendingDown}
             colorClass="text-expense"
             bgClass="card-expense"
             delay={150}
             onClick={handleExpensesClick}
+            subtitle="Ver movimientos del mes"
           />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <MetricCard
-            title="Ahorro"
-            value={`+${userSavingsThisMonth.toFixed(2)}`}
+            title="Ahorro general"
+            value={`+${savingsSummary.totalSaved.toFixed(2)}`}
             icon={PiggyBank}
             colorClass="text-savings"
-            bgClass={cn("card-savings", savingsExpanded && "ring-2 ring-savings")}
+            bgClass="card-savings"
             delay={200}
-            onClick={handleSavingsClick}
-            isActive={savingsExpanded}
+            onClick={handleGeneralSavingsClick}
+            subtitle={
+              savingsSummary.totalTarget > 0
+                ? `${savingsSummary.overallProgress.toFixed(0)}% del objetivo`
+                : "Toca para ver detalle"
+            }
+            disabled={!savingsBreakdownHasAny}
           />
           <MetricCard
-            title="Total gastos"
-            value={`-${totalExpensesWithFixed.toFixed(2)}`}
-            icon={Receipt}
-            colorClass="text-warning"
-            bgClass="bg-warning/10 border-warning/20"
-            delay={250}
+            title="Ahorro del mes"
+            value={`+${monthlySavings.totalForMonth.toFixed(2)}`}
+            icon={CalendarCheck}
+            colorClass="text-savings"
+            bgClass="card-savings"
+            delay={220}
+            onClick={handleMonthlySavingsClick}
+            subtitle={
+              monthlySavings.planned > 0
+                ? `Plan: ${monthlySavings.planned.toFixed(2)}`
+                : "Confirmar ahorro del mes"
+            }
           />
         </div>
+        <MetricCard
+          title="Total obligaciones"
+          value={`-${totalObligations.toFixed(2)}`}
+          icon={ListChecks}
+          colorClass="text-warning"
+          bgClass="bg-warning/10 border-warning/20"
+          delay={250}
+          subtitle={`Variables + fijos + aplazados + provisiones`}
+        />
       </div>
 
-      {savingsExpanded && <SavingsPanelExpanded />}
-
-      {isVisible("chart") && (dashboardConfig.charts ?? []).length > 0 && (
+      {hasChart && (
         <Card
           className="overflow-hidden animate-fade-in"
-          style={{ animationDelay: "300ms", borderColor: dashboardConfig.charts[0].accentColor + "30" }}
+          style={{ animationDelay: "300ms", borderColor: chart.accentColor + "30" }}
         >
           <CardContent className="p-4">
             <h2 className="text-sm font-semibold mb-4 flex items-center gap-2">
-              {dashboardConfig.charts[0].name}
+              <Receipt className="h-4 w-4 text-muted-foreground" />
+              {chart.name}
             </h2>
             <div className="h-64">
-              <ChartRenderer
-                chart={dashboardConfig.charts[0]}
-                data={chartData}
-              />
+              <ChartRenderer chart={chart} data={expensesByCategory} />
             </div>
           </CardContent>
         </Card>
       )}
 
-      {isVisible("chart") && (dashboardConfig.charts ?? []).length === 0 && (
+      {isVisible("chart") && !hasChart && (
         <Card className="overflow-hidden animate-fade-in" style={{ animationDelay: "300ms" }}>
           <CardContent className="p-4 text-center py-8">
             <p className="text-sm text-muted-foreground">No hay graficos creados.</p>
-            <p className="text-xs text-muted-foreground mt-1">Usa el boton de personalizar para crear uno.</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Usa el boton de personalizar para crear uno.
+            </p>
           </CardContent>
         </Card>
       )}
 
-      {isVisible("savingsPlan") && savingsPlanData && (
-        <Card className="overflow-hidden animate-fade-in border-blue-200 bg-blue-50/50" style={{ animationDelay: "320ms" }}>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-semibold flex items-center gap-2">
-                <PiggyBank className="h-4 w-4 text-savings" />
-                Plan de ahorro del mes
-              </h2>
-              {monthlyIncome > 0 && (
-                <span className="text-xs px-2 py-1 rounded-full bg-income/20 text-income font-medium">
-                  {incomeType === "fixed" ? "Fija" : "Variable"}
-                </span>
-              )}
-            </div>
-            <div className="space-y-3">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Ingresos</span>
-                <span className="font-medium text-income">+{savingsPlanData.baseIncome.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Gastos fijos mensuales</span>
-                <span className="font-medium">-{savingsPlanData.totalFixed.toFixed(2)}</span>
-              </div>
-              <div className="h-px bg-border" />
-              <div className="flex justify-between text-sm font-medium">
-                <span className="text-muted-foreground">Disponible</span>
-                <span className={savingsPlanData.netForMonth >= 0 ? "text-income" : "text-expense"}>
-                  {savingsPlanData.netForMonth >= 0 ? "+" : ""}{savingsPlanData.netForMonth.toFixed(2)}
-                </span>
-              </div>
-
-              {monthlyIncome > 0 && (
-                <>
-                  <div className="mt-4 p-3 rounded-lg bg-white/50 border border-blue-100">
-                    <p className="text-xs font-semibold text-blue-800 mb-2 uppercase tracking-wide">
-                      Basado en tu nomina configurada
-                    </p>
-                    <div className="flex justify-between text-sm mb-1">
-                      <span className="text-muted-foreground">Tu nomina</span>
-                      <span className="font-medium">{monthlyIncome.toFixed(2)} €</span>
-                    </div>
-                    <div className="flex justify-between text-sm mb-1">
-                      <span className="text-muted-foreground">Gastos fijos</span>
-                      <span className="font-medium">-{fixedMonthly.toFixed(2)}</span>
-                    </div>
-                    <div className="h-px bg-blue-200 my-2" />
-                    <div className="flex justify-between text-sm font-medium">
-                      <span className="text-blue-800">Neto estimado</span>
-                      <span className="text-blue-800">{(monthlyIncome - fixedMonthly).toFixed(2)} €</span>
-                    </div>
-                  </div>
-
-                  <div className="border-t border-blue-100 pt-3 mt-3">
-                    <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">
-                      Recomendacion por prioridad
-                    </p>
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-red-500" />
-                        <span className="text-xs text-muted-foreground flex-1">Gastos esenciales (ALTA)</span>
-                        <span className="text-xs font-medium text-red-600">Cubiertos</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-yellow-500" />
-                        <span className="text-xs text-muted-foreground flex-1">Gastos importantes (MEDIA)</span>
-                        <span className="text-xs font-medium text-yellow-600">Revisar</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-blue-500" />
-                        <span className="text-xs text-muted-foreground flex-1">Ahorro sugerido (20%)</span>
-                        <span className="text-xs font-medium text-savings">+{savingsPlanData.suggestedSavings.toFixed(2)}</span>
-                      </div>
-                    </div>
-                  </div>
-                </>
-              )}
-
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Sugerencia: 20% ahorro</span>
-                <span className="font-medium text-savings">+{savingsPlanData.suggestedSavings.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Para gastos variables</span>
-                <span className="font-medium">{savingsPlanData.discretionaryBudget.toFixed(2)}</span>
-              </div>
-              {savingsPlanData.netForMonth < 0 && (
-                <div className="rounded-lg bg-red-100 p-3 text-xs text-red-800">
-                  Cuidado: tus gastos fijos superan tus ingresos. Revisa tu presupuesto.
-                </div>
-              )}
-              {monthlyIncome === 0 && (
-                <a
-                  href="/more/salary"
-                  className="block mt-2 text-center text-xs text-blue-600 hover:text-blue-800 hover:underline"
-                >
-                  Configurar nomina para ver plan personalizado →
-                </a>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+      {isVisible("savingsPlan") && (
+        <SavingsPlanWidget
+          monthName={monthName}
+          monthlyIncome={salaryConfig?.fixedAmount ?? 0}
+          incomeType={salaryConfig?.type ?? "fixed"}
+          salaryConfigured={isSalaryConfigured}
+        />
       )}
 
       {isVisible("detail") && recentTransactions.length > 0 && (
@@ -587,7 +550,9 @@ export default function VistaMesPage() {
                           ? "bg-income/10"
                           : t.tipo === "Gasto"
                             ? "bg-expense/10"
-                            : "bg-savings/10",
+                            : t.tipo === "Ahorro"
+                              ? "bg-savings/10"
+                              : "bg-muted",
                       )}
                     >
                       {t.tipo === "Ingreso" ? (
@@ -623,6 +588,14 @@ export default function VistaMesPage() {
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {isReorderMode && (
+        <ReorderOverlay
+          isActive={isReorderMode}
+          onConfirm={confirmReorder}
+          onCancel={exitReorderMode}
+        />
       )}
 
       <div className="fixed bottom-24 right-4 z-40">
@@ -671,11 +644,7 @@ export default function VistaMesPage() {
             className="h-14 w-14 rounded-full shadow-xl bg-primary hover:bg-primary/90"
             onClick={() => setShowAddMenu(!showAddMenu)}
           >
-            {showAddMenu ? (
-              <X className="h-6 w-6" />
-            ) : (
-              <Plus className="h-6 w-6" />
-            )}
+            {showAddMenu ? <X className="h-6 w-6" /> : <Plus className="h-6 w-6" />}
           </Button>
         </div>
       </div>
@@ -712,6 +681,110 @@ export default function VistaMesPage() {
       </Dialog>
 
       <DashboardCustomizer open={showCustomizer} onOpenChange={setShowCustomizer} />
+
+      <DisponibleExplanationModal
+        open={showDisponibleModal}
+        onOpenChange={setShowDisponibleModal}
+        available={available}
+        pendingFixedCount={Math.max(0, pendingFixedCount)}
+        savingsEmpty={!monthlySavingsHasAny}
+        salaryConfigured={isSalaryConfigured}
+      />
+
+      <GeneralSavingsBreakdownModal
+        open={showGeneralSavingsModal}
+        onOpenChange={setShowGeneralSavingsModal}
+        totalSaved={savingsSummary.totalSaved}
+        totalTarget={savingsSummary.totalTarget}
+        overallProgress={savingsSummary.overallProgress}
+        reserves={breakdown.reserves}
+        goals={breakdown.goals}
+        futurePayments={breakdown.futurePayments}
+        hasAnyItems={savingsBreakdownHasAny}
+      />
+
+      <MonthlySavingsBreakdownModal
+        open={showMonthlySavingsModal}
+        onOpenChange={setShowMonthlySavingsModal}
+        monthKey={selectedMonth}
+        monthName={monthName}
+        breakdown={monthlySavings}
+        targetNameById={targetNameById}
+      />
     </div>
+  );
+}
+
+interface SavingsPlanWidgetProps {
+  monthName: string;
+  monthlyIncome: number;
+  incomeType: "fixed" | "variable";
+  salaryConfigured: boolean;
+}
+
+function SavingsPlanWidget({
+  monthName,
+  monthlyIncome,
+  incomeType,
+  salaryConfigured,
+}: SavingsPlanWidgetProps) {
+  if (!salaryConfigured) {
+    return (
+      <Card
+        className="overflow-hidden animate-fade-in border-blue-200 bg-blue-50/50"
+        style={{ animationDelay: "320ms" }}
+      >
+        <CardContent className="p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Target className="h-4 w-4 text-primary" />
+            <h2 className="text-sm font-semibold">Plan personalizado</h2>
+          </div>
+          <p className="text-xs text-muted-foreground mb-3">
+            Configura tu nomina para ver un plan de ahorro basado en tus ingresos.
+          </p>
+          <Button asChild size="sm" variant="outline" className="w-full">
+            <a href="/more/salary">Configurar nomina</a>
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card
+      className="overflow-hidden animate-fade-in border-blue-200 bg-blue-50/50"
+      style={{ animationDelay: "320ms" }}
+    >
+      <CardContent className="p-4">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-semibold flex items-center gap-2">
+            <Target className="h-4 w-4 text-primary" />
+            Plan de ahorro del mes
+          </h2>
+          <span className="text-xs px-2 py-1 rounded-full bg-income/20 text-income font-medium">
+            {incomeType === "fixed" ? "Fija" : "Variable"}
+          </span>
+        </div>
+        <div className="space-y-2 text-sm">
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Tu nomina</span>
+            <span className="font-medium">{monthlyIncome.toFixed(2)} €</span>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Toca el card &quot;Disponible&quot; arriba para ver el desglose completo
+            de {monthName}.
+          </p>
+          {salaryConfigured && (
+            <div className="rounded-lg bg-blue-100/70 p-2 text-xs text-blue-900 flex items-start gap-1.5">
+              <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+              <span>
+                El Disponible ya descuenta los fijos confirmados/pendientes y
+                las provisiones de pagos futuros.
+              </span>
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
   );
 }

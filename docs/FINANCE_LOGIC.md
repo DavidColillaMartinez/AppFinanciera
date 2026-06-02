@@ -301,7 +301,7 @@ available = income
 - Pending fixed obligations are still part of the formula (the user must know
   they are committed money).
 
-## 9. Dashboard metrics
+## 9. Dashboard metrics (implemented Phase 8)
 
 The dashboard must show at least:
 
@@ -315,13 +315,40 @@ The dashboard must show at least:
 - Future payment provisions
 - Month status
 
-Interactions:
+The dashboard consumes the engine via `useFinanceSummary({ monthKey })`. It does
+**not** recompute any financial formula locally. All cards read from
+`summary.available`, `summary.savings`, `summary.monthlySavings` and
+`getSavingsBreakdown(ctx)`.
 
-- `Disponible` → opens the calculation breakdown.
-- `Ingresos` → `/transactions?filterType=Ingreso`.
-- `Gastos` → `/transactions?filterType=Gasto`.
-- `Ahorro general` → breakdown by reserve, goal and future payment.
-- `Ahorro del mes` → distribution for the selected month.
+### 9.1 Card interactions
+
+- `Disponible` → opens `DisponibleExplanationModal` (engine result
+  `available` with `explanation[]`). The modal groups lines by
+  `income / expense / saving / provision / adjustment` and shows the
+  warnings (salary not configured, pending fixed expenses).
+- `Ingresos` → `/transactions?filterType=Ingreso&month=YYYY-MM`.
+- `Gastos` → `/transactions?filterType=Gasto&month=YYYY-MM`.
+- `Ahorro general` → opens `GeneralSavingsBreakdownModal`. Reads
+  `getSavingsBreakdown(ctx)` (reserves + goals + future payments) and shows
+  the per-target progress and totals.
+- `Ahorro del mes` → opens `MonthlySavingsBreakdownModal`. Reads
+  `summary.monthlySavings` (filtering by `mesClave` and the
+  `isLedgerEntry` guard). Shows by-destination breakdown and the
+  individual ledger rows of the month.
+- `Total obligaciones` → non-clickable card showing
+  `variable + fixedConfirmed + fixedPending + deferred + futureProvisions`
+  (the engine components that reduce spendable money). Replaces the old
+  misleading "Total gastos" card.
+
+### 9.2 Transactions page filters (implemented Phase 8)
+
+- `/transactions` reads `filterType` and `month` from the URL and applies
+  them on mount. A banner shows which filters came from the dashboard and
+  offers a "Limpiar" action that strips the query params.
+- Unknown or invalid `filterType` values are ignored. Months are validated
+  against the `YYYY-MM` regex.
+- The page is wrapped in `<Suspense>` because `useSearchParams` requires it
+  in Next.js 16.
 
 ## 10. Forms and movements
 
@@ -392,7 +419,7 @@ required structure is present. Visual formatting is irrelevant.
 - Phase 5 — salary / payroll — **implemented**.
 - Phase 6 — fixed expenses monthly confirmation — **implemented**.
 - Phase 7 — `Mov_reservas` savings ledger — **implemented**.
-- Phase 8 — dashboard metrics using the engine — pending.
+- Phase 8 — dashboard metrics using the engine — **implemented**.
 - Phase 9 — forms and movement flows — pending.
 - Phase 10 — Google session and Sheet connection recovery — pending.
 - Phase 11 — UI / design polish — pending.
@@ -401,4 +428,4 @@ Full phase details, files touched and conventions: `docs/FINANCE_IMPLEMENTATION.
 
 ## 15. Next phase pointer
 
-**Phase 8 — Dashboard metrics using the engine.**
+**Phase 9 — Forms and movement flows.**

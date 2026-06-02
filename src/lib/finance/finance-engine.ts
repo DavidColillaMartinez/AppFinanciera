@@ -115,6 +115,7 @@ export interface DashboardFinanceSummary {
   available: AvailableBalanceBreakdown;
   savings: SavingsSummary;
   monthlySavings: MonthlySavingsBreakdown;
+  savingsBreakdown: SavingsBreakdown;
   income: number;
   variableExpenses: number;
   fixedExpensesTotal: number;
@@ -678,11 +679,13 @@ export function getDashboardSummary(
   const available = getAvailableBalance(ctx);
   const savings = getGeneralSavings(ctx);
   const monthlySavings = getMonthlySavings(ctx);
+  const savingsBreakdown = getSavingsBreakdown(ctx);
 
   return {
     available,
     savings,
     monthlySavings,
+    savingsBreakdown,
     income: available.income,
     variableExpenses: available.variableExpenses,
     fixedExpensesTotal:

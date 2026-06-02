@@ -145,21 +145,64 @@ live in `docs/FINANCE_AUDIT.md`.
 - **Template update required**: no.
 - **See**: `FINANCE_AUDIT.md` A5, A7, A8.
 
-## Phase 8 — Dashboard metrics using the engine — `pending`
+## Phase 8 — Dashboard metrics using the engine — `implemented`
 
 - **Purpose**: dashboard consumes the engine output end-to-end and exposes the
   explanation behind "Disponible" and the savings panels.
-- **Pending goals**:
-  - `Disponible` is `getAvailableBalance` result; clicking it opens a modal with `explainAvailableBalance`.
-  - `Ahorro general` and `Ahorro del mes` are two separate cards; each click opens a different breakdown.
-  - `Ahorro general` shows totals across reserves, goals and future payment provisions.
-  - `Ahorro del mes` shows how this month was distributed.
-  - `Disponible` filters by account role when the user has more than one role.
-  - The transactions page filter via `/transactions?filterType=...` is verified (or moved to Phase 9).
-- **Likely files**:
-  - `src/app/page.tsx`
-  - `src/components/dashboard/savings-panel-expanded.tsx`
-  - `src/components/dashboard/explainable-metric-card.tsx` (new)
+- **Main files**:
+  - `src/app/page.tsx` — refactored. Uses `useFinanceSummary({ monthKey })`
+    for all numbers, `getSavingsBreakdown(ctx)` for the per-target detail,
+    and `useSalaryConfig` for the live salary value. Removed all duplicate
+    inline calculations (`fixedMonthly`, `deferredMonthly`, `futureMonthly`,
+    `totalExpensesWithFixed`, `availableBalance`, the legacy `savingsPlan`
+    totals). The salary-auto-add effect now respects the `currentMonth` guard
+    so navigating to a past month does not re-add the salary.
+  - `src/components/dashboard/disponible-explanation-modal.tsx` — new.
+    Reads `available` from the engine. Groups `explanation[]` by
+    `income / expense / saving / provision / adjustment`. Shows a salary
+    warning if salary is not configured, a pending-fixed warning that links
+    to `/fixed-expenses/confirm`, and an action button to
+    `/savings/monthly` when the month has no savings.
+  - `src/components/dashboard/general-savings-breakdown-modal.tsx` — new.
+    Reads `getSavingsBreakdown(ctx)` and shows per-target detail
+    (reserves, goals, future payments) with totals, progress, remaining
+    amount and monthly recommended.
+  - `src/components/dashboard/monthly-savings-breakdown-modal.tsx` — new.
+    Reads `summary.monthlySavings` (already filtered by `mesClave` and the
+    `isLedgerEntry` guard from Phase 7). Shows the per-destination
+    breakdown and the individual ledger rows of the month.
+  - `src/app/transactions/page.tsx` — refactored. Now reads
+    `?filterType=...&month=YYYY-MM` from the URL on mount and shows a banner
+    that lets the user clear the query filters. The default `Transactions`
+    navigation is preserved. Wrapped in `<Suspense>` for Next.js 16.
+  - `src/components/dashboard/savings-panel-expanded.tsx` — removed.
+    The new modals cover its responsibilities using the engine.
+- **Card layout**:
+  - Row 1: `Disponible` (clickable → modal).
+  - Row 2: `Ingresos | Gastos variables` (clickable → /transactions with
+    filters).
+  - Row 3: `Ahorro general | Ahorro del mes` (clickable → modals).
+  - Row 4: `Total obligaciones` (non-clickable summary).
+  - Chart, plan and recent-transactions widgets follow the existing
+    `isVisible` config and consume engine data where applicable.
+- **Chart engine wiring**:
+  - The category chart on the dashboard now consumes
+    `calculateExpensesByCategory(transactions, categories)` — the same
+    primitive the engine uses internally for the
+    `savings.transactions.filter(Gasto)` slice. The legacy
+    `getChartData("categories", ...)` path is left intact for other
+    callers but is not used by the dashboard anymore.
+  - Multi-source charts (`expenses`, `savings`, `income`, `total`, `fixed`,
+    `deferred`, `future`) are still consumed through the customizer, but
+    not on the default dashboard card. Migration is documented as a Phase
+    11 polish item.
+- **No double counting**: dashboard savings still use
+  `summary.monthlySavings` which already applies the `isLedgerEntry` guard
+  from Phase 7.
+- **No generic `Ahorro` movement creation**: the dashboard no longer
+  creates `Ahorro` movements from its UI. The only saving flow the
+  dashboard now triggers is the link to `/savings/monthly`.
+- **Template update required**: no.
 - **See**: `FINANCE_AUDIT.md` A1, A7, A9.
 
 ## Phase 9 — Forms and movement flows — `pending`
@@ -232,7 +275,7 @@ live in `docs/FINANCE_AUDIT.md`.
 | 5 | Salary / payroll | implemented |
 | 6 | Fixed expenses monthly confirmation | implemented |
 | 7 | Savings ledger (`Mov_reservas`) | implemented |
-| 8 | Dashboard metrics using the engine | pending |
+| 8 | Dashboard metrics using the engine | implemented |
 | 9 | Forms and movement flows | pending |
 | 10 | Google session and Sheet connection recovery | pending |
 | 11 | UI / design polish | pending |

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { Suspense, useEffect, useState, useMemo } from "react";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -45,18 +46,44 @@ const typeOptions = [
   { value: TransactionType.TRANSFERENCIA_INTERNA, label: "Transferencias" },
 ];
 
-export default function TransactionsPage() {
+const VALID_TRANSACTION_TYPES = new Set<string>(Object.values(TransactionType));
+
+function TransactionsContent() {
   const { sheetId } = useAppStore();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedType, setSelectedType] = useState<TransactionType | null>(null);
   const [selectedMonth, setSelectedMonth] = useState<string>(
     new Date().toISOString().slice(0, 7),
   );
-  const [filterType, setFilterType] = useState("");
+
+  const queryFilterType = useMemo(() => {
+    const raw = searchParams.get("filterType") ?? "";
+    return VALID_TRANSACTION_TYPES.has(raw) ? raw : "";
+  }, [searchParams]);
+
+  const queryMonth = useMemo(() => {
+    const raw = searchParams.get("month") ?? "";
+    return /^\d{4}-\d{2}$/.test(raw) ? raw : "";
+  }, [searchParams]);
+
+  const [filterType, setFilterType] = useState(queryFilterType);
   const [filterCategory, setFilterCategory] = useState("");
   const [filterAccount, setFilterAccount] = useState("");
   const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    if (queryFilterType && queryFilterType !== filterType) {
+      setFilterType(queryFilterType);
+    }
+    if (queryMonth && queryMonth !== selectedMonth) {
+      setSelectedMonth(queryMonth);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queryFilterType, queryMonth]);
 
   const {
     data: transactions,
@@ -67,6 +94,16 @@ export default function TransactionsPage() {
   const { data: categories } = useCategories(sheetId);
   const { data: accounts } = useAccounts(sheetId);
   const deleteTransaction = useDeleteTransaction(sheetId);
+
+  function clearQueryFilters() {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("filterType");
+    params.delete("month");
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  }
+
+  const activeQueryFilters = Boolean(queryFilterType || queryMonth);
 
   const categoryOptions = [
     { value: "", label: "Todas" },
@@ -229,7 +266,10 @@ export default function TransactionsPage() {
         <Select
           options={typeOptions}
           value={filterType}
-          onChange={(e) => setFilterType(e.target.value)}
+          onChange={(e) => {
+            setFilterType(e.target.value);
+            if (activeQueryFilters) clearQueryFilters();
+          }}
         />
         <Select
           options={categoryOptions}
@@ -242,6 +282,25 @@ export default function TransactionsPage() {
           onChange={(e) => setFilterAccount(e.target.value)}
         />
       </div>
+
+      {activeQueryFilters && (
+        <div className="flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-xs">
+          <span className="text-muted-foreground">Filtros desde el dashboard:</span>
+          {queryFilterType && (
+            <Badge variant="secondary" className="text-xs">
+              {typeOptions.find((o) => o.value === queryFilterType)?.label ??
+                queryFilterType}
+            </Badge>
+          )}
+          {queryMonth && <Badge variant="secondary" className="text-xs">{queryMonth}</Badge>}
+          <button
+            onClick={clearQueryFilters}
+            className="ml-auto text-primary hover:underline"
+          >
+            Limpiar
+          </button>
+        </div>
+      )}
 
       <div className="grid grid-cols-4 gap-2">
         <Card className="card-income">
@@ -434,5 +493,15 @@ export default function TransactionsPage() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+export default function TransactionsPage() {
+  return (
+    <Suspense
+      fallback={<LoadingState message="Cargando movimientos..." />}
+    >
+      <TransactionsContent />
+    </Suspense>
   );
 }
