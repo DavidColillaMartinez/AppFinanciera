@@ -450,7 +450,7 @@ export function DashboardCustomizer({
           </div>
         )}
 
-        {editor.step === "list" && dashboardConfig.charts.length > 0 && (
+        {editor.step === "list" && (dashboardConfig.charts ?? []).length > 0 && (
           <div className="border-t pt-4 mt-4">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-medium">Graficos creados</h3>
@@ -460,7 +460,7 @@ export function DashboardCustomizer({
               </Button>
             </div>
             <div className="space-y-2">
-              {dashboardConfig.charts.map((chart) => (
+              {(dashboardConfig.charts ?? []).map((chart) => (
                 <div
                   key={chart.id}
                   className="flex items-center justify-between rounded-lg border p-3"
@@ -499,7 +499,7 @@ export function DashboardCustomizer({
           </div>
         )}
 
-        {editor.step === "list" && dashboardConfig.charts.length === 0 && (
+        {editor.step === "list" && (dashboardConfig.charts ?? []).length === 0 && (
           <div className="border-t pt-4 mt-4">
             <div className="text-center py-6 space-y-3">
               <div className="text-4xl">📊</div>

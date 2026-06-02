@@ -260,6 +260,7 @@ export const useAppStore = create<AppState & AppActions>()(
     }),
     {
       name: STORAGE_KEY,
+      version: 2,
       partialize: (state) => ({
         sheetId: state.sheetId,
         sheetUrl: state.sheetUrl,

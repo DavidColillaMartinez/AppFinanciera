@@ -411,7 +411,7 @@ export default function VistaMesPage() {
 
       {savingsExpanded && <SavingsPanelExpanded />}
 
-      {isVisible("chart") && dashboardConfig.charts.length > 0 && (
+      {isVisible("chart") && (dashboardConfig.charts ?? []).length > 0 && (
         <Card
           className="overflow-hidden animate-fade-in"
           style={{ animationDelay: "300ms", borderColor: dashboardConfig.charts[0].accentColor + "30" }}
@@ -430,7 +430,7 @@ export default function VistaMesPage() {
         </Card>
       )}
 
-      {isVisible("chart") && dashboardConfig.charts.length === 0 && (
+      {isVisible("chart") && (dashboardConfig.charts ?? []).length === 0 && (
         <Card className="overflow-hidden animate-fade-in" style={{ animationDelay: "300ms" }}>
           <CardContent className="p-4 text-center py-8">
             <p className="text-sm text-muted-foreground">No hay graficos creados.</p>
