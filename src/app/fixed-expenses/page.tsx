@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,7 +11,7 @@ import { EmptyState } from "@/components/states/empty-state";
 import { LoadingState } from "@/components/states/loading-state";
 import { ErrorState } from "@/components/states/error-state";
 import { FixedExpenseForm } from "@/features/fixed-expenses/components/fixed-expense-form";
-import { Pencil, Trash2, Plus, Calendar } from "lucide-react";
+import { Pencil, Trash2, Plus, Calendar, ChevronRight, CalendarCheck } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -19,7 +20,6 @@ import {
 } from "@/components/ui/dialog";
 import type { FixedExpenseRow } from "@/types/models";
 import { Frequency } from "@/constants/enums";
-import { cn } from "@/lib/utils";
 
 const frequencyLabels: Record<string, string> = {
   [Frequency.MENSUAL]: "Mensual",
@@ -107,6 +107,28 @@ export default function FixedExpensesPage() {
               <Calendar className="h-6 w-6 text-expense" />
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card className="overflow-hidden border-primary/20">
+        <CardContent className="p-0">
+          <Link
+            href="/fixed-expenses/confirm"
+            className="flex items-center justify-between p-4 active:bg-muted/50"
+          >
+            <div className="flex items-center gap-4">
+              <div className="rounded-xl bg-primary/10 p-3">
+                <CalendarCheck className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <p className="font-semibold text-sm">Confirmar gastos del mes</p>
+                <p className="text-xs text-muted-foreground">
+                  Revisa y confirma los gastos fijos que corresponden a este mes
+                </p>
+              </div>
+            </div>
+            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          </Link>
         </CardContent>
       </Card>
 

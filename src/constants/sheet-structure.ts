@@ -154,6 +154,10 @@ export const SALARY_CONFIG_KEYS = {
   UPDATED_AT: "salary.updatedAt",
 } as const;
 
+export const FIXED_CONFIG_KEYS = {
+  CONFIRMED_PREFIX: "fixed.confirmed.",
+} as const;
+
 export const FIRST_DATA_ROW = 2;
 
 export const TEMPLATE_VERSION = "1.0.0";

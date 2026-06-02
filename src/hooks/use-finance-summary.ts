@@ -12,6 +12,7 @@ import { useReserves } from "@/features/reserves/hooks/use-reserves";
 import { useGoals } from "@/features/goals/hooks/use-goals";
 import { useReserveMovements } from "@/features/reserve-movements/hooks/use-reserve-movements";
 import { useSalaryConfig } from "@/features/salary/hooks/use-salary";
+import { useConfirmedFixedExpenseIds } from "@/features/fixed-expenses/hooks/use-fixed-confirmation";
 import {
   buildFinanceContext,
   getDashboardSummary,
@@ -49,6 +50,16 @@ export function useFinanceSummary(
   const { data: goals, isLoading: lG } = useGoals(sheetId);
   const { data: reserveMovements, isLoading: lRM } = useReserveMovements(sheetId);
   const { data: salaryConfig, isLoading: lS } = useSalaryConfig(sheetId);
+  const { data: confirmedFixedIds, isLoading: lCF } = useConfirmedFixedExpenseIds(
+    sheetId,
+    monthKey,
+  );
+
+  const externalConfirmedFixed = options.confirmedFixedExpenseIds;
+  const effectiveConfirmedFixed = useMemo(
+    () => externalConfirmedFixed ?? confirmedFixedIds ?? new Set<string>(),
+    [externalConfirmedFixed, confirmedFixedIds],
+  );
 
   const summary = useMemo(() => {
     const ctx = buildFinanceContext({
@@ -64,7 +75,7 @@ export function useFinanceSummary(
       reserveMovements: reserveMovements ?? [],
       monthlyIncome: salaryConfig?.enabled ? salaryConfig.fixedAmount : 0,
       incomeType: salaryConfig?.type ?? "fixed",
-      confirmedFixedExpenseIds: options.confirmedFixedExpenseIds,
+      confirmedFixedExpenseIds: effectiveConfirmedFixed,
       confirmedDeferredPaymentIds: options.confirmedDeferredPaymentIds,
     });
     return getDashboardSummary(ctx);
@@ -80,14 +91,14 @@ export function useFinanceSummary(
     goals,
     reserveMovements,
     salaryConfig,
-    options.confirmedFixedExpenseIds,
+    effectiveConfirmedFixed,
     options.confirmedDeferredPaymentIds,
   ]);
 
   return {
     summary,
     isLoading:
-      lT || lC || lA || lF || lFP || lD || lR || lG || lRM || lS,
+      lT || lC || lA || lF || lFP || lD || lR || lG || lRM || lS || lCF,
     isError: eT,
   };
 }

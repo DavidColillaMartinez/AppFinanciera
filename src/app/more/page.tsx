@@ -13,6 +13,7 @@ import {
   PiggyBank,
   FileSpreadsheet,
   DollarSign,
+  CalendarCheck,
 } from "lucide-react";
 import { useAppStore } from "@/stores/app-store";
 
@@ -66,6 +67,25 @@ export default function MorePage() {
         <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide px-1">
           Configuracion
         </h2>
+
+        <Card className="overflow-hidden transition-all hover:shadow-md">
+          <CardContent className="p-0">
+            <Link href="/fixed-expenses/confirm" className="flex items-center justify-between p-4 active:bg-muted/50">
+              <div className="flex items-center gap-4">
+                <div className="rounded-xl bg-expense/10 p-3">
+                  <CalendarCheck className="h-5 w-5 text-expense" />
+                </div>
+                <div>
+                  <p className="font-semibold text-sm">Confirmar gastos del mes</p>
+                  <p className="text-xs text-muted-foreground">
+                    Revisa y confirma tus gastos fijos mensuales
+                  </p>
+                </div>
+              </div>
+              <ChevronRight className="h-4 w-4 text-muted-foreground" />
+            </Link>
+          </CardContent>
+        </Card>
 
         <Card className="overflow-hidden transition-all hover:shadow-md">
           <CardContent className="p-0">
