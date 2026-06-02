@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,12 +9,14 @@ import {
   useFuturePayments,
   useDeleteFuturePayment,
 } from "@/features/future-payments/hooks/use-future-payments";
+import { useTargetBalances } from "@/features/savings/hooks/use-savings";
 import { useAppStore } from "@/stores/app-store";
 import { EmptyState } from "@/components/states/empty-state";
 import { LoadingState } from "@/components/states/loading-state";
 import { ErrorState } from "@/components/states/error-state";
 import { FuturePaymentForm } from "@/features/future-payments/components/future-payment-form";
-import { Pencil, Trash2, Plus, Clock } from "lucide-react";
+import { SavingsMovementForm } from "@/features/savings/components/savings-movement-form";
+import { Pencil, Trash2, Plus, ArrowDownLeft, Clock } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -30,6 +32,10 @@ export default function FuturePaymentsPage() {
   const [editingPayment, setEditingPayment] = useState<FuturePaymentRow | null>(
     null,
   );
+  const [contributeTarget, setContributeTarget] = useState<{
+    pagoId: string;
+    concepto: string;
+  } | null>(null);
 
   const {
     data: payments,
@@ -39,12 +45,30 @@ export default function FuturePaymentsPage() {
   } = useFuturePayments(sheetId);
   const deletePayment = useDeleteFuturePayment(sheetId);
 
-  const totalObjetivo = (payments ?? []).reduce(
+  const activePayments = (payments ?? []).filter((p) => p.activo === "S");
+  const { data: balances } = useTargetBalances(sheetId, {
+    futurePayments: activePayments.map((p) => ({
+      pagoId: p.pagoId,
+      saldoReservado: p.saldoReservado,
+    })),
+  });
+
+  const balanceMap = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const b of balances ?? []) {
+      if (b.tipoDestino === "pago_futuro") {
+        map.set(b.destinoId, b.effectiveBalance);
+      }
+    }
+    return map;
+  }, [balances]);
+
+  const totalObjetivo = activePayments.reduce(
     (acc, p) => acc + p.importeObjetivo,
     0,
   );
-  const totalReservado = (payments ?? []).reduce(
-    (acc, p) => acc + p.saldoReservado,
+  const totalReservado = activePayments.reduce(
+    (acc, p) => acc + (balanceMap.get(p.pagoId) ?? p.saldoReservado),
     0,
   );
 
@@ -126,10 +150,11 @@ export default function FuturePaymentsPage() {
       {!isLoading && !isError && payments && payments.length > 0 && (
         <div className="space-y-2">
           {payments.map((payment) => {
+            const saved = balanceMap.get(payment.pagoId) ?? payment.saldoReservado;
             const progress =
               payment.importeObjetivo > 0
                 ? Math.min(
-                    (payment.saldoReservado / payment.importeObjetivo) * 100,
+                    (saved / payment.importeObjetivo) * 100,
                     100,
                   )
                 : 0;
@@ -177,7 +202,7 @@ export default function FuturePaymentsPage() {
                       </div>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span>{payment.saldoReservado.toFixed(2)}</span>
+                      <span>{saved.toFixed(2)}</span>
                       <span className="text-muted-foreground">
                         / {payment.importeObjetivo.toFixed(2)}
                       </span>
@@ -186,16 +211,32 @@ export default function FuturePaymentsPage() {
                       value={progress}
                       className="h-2"
                     />
-                    <div className="flex justify-between text-xs text-muted-foreground">
-                      <span>{progress.toFixed(1)}%</span>
-                      {payment.aporteMensual > 0 && (
-                        <span>
-                          Aporte: {payment.aporteMensual.toFixed(2)}/mes
-                        </span>
-                      )}
-                      {payment.mesesRestantes > 0 && (
-                        <span>{payment.mesesRestantes} meses restantes</span>
-                      )}
+                    <div className="flex justify-between items-center text-xs text-muted-foreground">
+                      <div className="flex flex-wrap gap-2">
+                        <span>{progress.toFixed(1)}%</span>
+                        {payment.aporteMensual > 0 && (
+                          <span>
+                            Aporte: {payment.aporteMensual.toFixed(2)}/mes
+                          </span>
+                        )}
+                        {payment.mesesRestantes > 0 && (
+                          <span>{payment.mesesRestantes} meses restantes</span>
+                        )}
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 gap-1 text-xs"
+                        onClick={() =>
+                          setContributeTarget({
+                            pagoId: payment.pagoId,
+                            concepto: payment.concepto,
+                          })
+                        }
+                      >
+                        <ArrowDownLeft className="h-3 w-3" />
+                        Aportar
+                      </Button>
                     </div>
                   </div>
                 </CardContent>
@@ -218,6 +259,28 @@ export default function FuturePaymentsPage() {
             onSuccess={closeForm}
             onCancel={closeForm}
           />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!contributeTarget}
+        onOpenChange={(open) => !open && setContributeTarget(null)}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Aportar / Retirar</DialogTitle>
+          </DialogHeader>
+          {contributeTarget && (
+            <SavingsMovementForm
+              sheetId={sheetId}
+              tipoDestino="pago_futuro"
+              destinoId={contributeTarget.pagoId}
+              reservaId={contributeTarget.pagoId}
+              destinoNombre={contributeTarget.concepto}
+              onSuccess={() => setContributeTarget(null)}
+              onCancel={() => setContributeTarget(null)}
+            />
+          )}
         </DialogContent>
       </Dialog>
     </div>

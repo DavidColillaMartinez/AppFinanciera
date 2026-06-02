@@ -11,6 +11,7 @@ import type {
 } from "@/types/models";
 import { TipoDestinoReserva, TipoMovimientoReserva, TransactionType } from "@/constants/enums";
 import { SALARY_MOVEMENT_ID_PREFIX } from "./salary-config";
+import { LEDGER_ID_PREFIX, getActiveMovements } from "./savings-ledger";
 
 export type MonthKey = string;
 
@@ -159,6 +160,10 @@ function isRetiradaMovement(m: ReserveMovementRow): boolean {
   return m.tipoMovimiento === TipoMovimientoReserva.RETIRADA;
 }
 
+export function isLedgerEntry(m: ReserveMovementRow): boolean {
+  return m.id.startsWith(LEDGER_ID_PREFIX);
+}
+
 function sumMovementsBalance(movements: ReserveMovementRow[]): number {
   return movements.reduce((acc, m) => {
     if (isAporteMovement(m)) return acc + m.importe;
@@ -171,8 +176,10 @@ function getReserveMovements(
   ctx: FinanceContext,
   reserveId: string,
 ): ReserveMovementRow[] {
-  return ctx.reserveMovements.filter(
-    (m) => m.reservaId === reserveId || m.destinoId === reserveId,
+  return getActiveMovements(ctx.reserveMovements).filter(
+    (m) =>
+      (m.tipoDestino === TipoDestinoReserva.RESERVA && m.destinoId === reserveId) ||
+      m.reservaId === reserveId,
   );
 }
 
@@ -180,7 +187,7 @@ function getGoalMovements(
   ctx: FinanceContext,
   goalId: string,
 ): ReserveMovementRow[] {
-  return ctx.reserveMovements.filter(
+  return getActiveMovements(ctx.reserveMovements).filter(
     (m) => m.tipoDestino === TipoDestinoReserva.OBJETIVO && m.destinoId === goalId,
   );
 }
@@ -189,7 +196,7 @@ function getFuturePaymentMovements(
   ctx: FinanceContext,
   pagoId: string,
 ): ReserveMovementRow[] {
-  return ctx.reserveMovements.filter(
+  return getActiveMovements(ctx.reserveMovements).filter(
     (m) => m.tipoDestino === TipoDestinoReserva.PAGO_FUTURO && m.destinoId === pagoId,
   );
 }
@@ -200,6 +207,15 @@ function computeEffectiveBalance(
 ): number {
   if (movements.length === 0) return manualBalance;
   return sumMovementsBalance(movements);
+}
+
+export function getTargetLedgerBalance(
+  movements: ReserveMovementRow[],
+  manualBalance: number,
+): number {
+  const active = getActiveMovements(movements);
+  if (active.length === 0) return manualBalance;
+  return sumMovementsBalance(active);
 }
 
 export function getMonthlyIncome(ctx: FinanceContext): number {
@@ -360,7 +376,7 @@ export function getGeneralSavings(ctx: FinanceContext): SavingsSummary {
 }
 
 export function getMonthlySavings(ctx: FinanceContext): MonthlySavingsBreakdown {
-  const movs = ctx.reserveMovements.filter(
+  const movs = getActiveMovements(ctx.reserveMovements).filter(
     (m) => (m.mesClave || (m.fecha ?? "").slice(0, 7)) === ctx.monthKey,
   );
 
@@ -382,6 +398,7 @@ export function getMonthlySavings(ctx: FinanceContext): MonthlySavingsBreakdown 
     .filter((t) => isActiveTransaction(t, ctx.monthKey))
     .filter((t) => t.tipo === TransactionType.AHORRO)
     .filter((t) => !t.reservaId)
+    .filter((t) => !t.id.startsWith(LEDGER_ID_PREFIX))
     .reduce((sum, t) => sum + t.importe, 0);
 
   const totalForMonth = reserva + objetivo + pago_futuro + general;

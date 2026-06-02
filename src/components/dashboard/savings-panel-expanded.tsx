@@ -1,13 +1,15 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useMemo } from "react";
+import Link from "next/link";
 import { useAppStore } from "@/stores/app-store";
 import { useReserves } from "@/features/reserves/hooks/use-reserves";
 import { useGoals } from "@/features/goals/hooks/use-goals";
 import { useFuturePayments } from "@/features/future-payments/hooks/use-future-payments";
 import { useDeferredPayments } from "@/features/deferred-payments/hooks/use-deferred-payments";
 import { useFixedExpenses } from "@/features/fixed-expenses/hooks/use-fixed-expenses";
-import { useCreateTransaction } from "@/features/transactions/hooks/use-transactions";
+import { useFinanceSummary } from "@/hooks/use-finance-summary";
+import { useTargetBalances } from "@/features/savings/hooks/use-savings";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -17,9 +19,10 @@ import {
   Target,
   Clock,
   CreditCard,
-  CheckCircle2,
   TrendingUp,
+  CalendarCheck,
 } from "lucide-react";
+import { generateMonthKey } from "@/lib/sheets/adapters";
 
 interface SavingsItemProps {
   icon: typeof PiggyBank;
@@ -75,18 +78,16 @@ function SavingsItem({
 }
 
 export function SavingsPanelExpanded() {
-  const { sheetId, monthlySavingsAddedMonths, addMonthlySavingsMonth, monthlyIncome, incomeType } = useAppStore();
+  const { sheetId, monthlyIncome, incomeType } = useAppStore();
   const { data: reserves } = useReserves(sheetId);
   const { data: goals } = useGoals(sheetId);
   const { data: futures } = useFuturePayments(sheetId);
   const { data: deferred } = useDeferredPayments(sheetId);
   const { data: fixedExpenses } = useFixedExpenses(sheetId);
-  const createTransaction = useCreateTransaction(sheetId);
 
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const currentMonth = new Date().toISOString().slice(0, 7);
-  const alreadyAdded = monthlySavingsAddedMonths.includes(currentMonth);
+  const currentMonth = useMemo(() => generateMonthKey(new Date().toISOString()), []);
+  const { summary } = useFinanceSummary({ monthKey: currentMonth });
+  const { savings, monthlySavings, available } = summary;
 
   const totalExpensesWithFixed = useMemo(() => {
     const fixedMonthly = (fixedExpenses ?? []).reduce((acc, exp) => {
@@ -104,36 +105,41 @@ export function SavingsPanelExpanded() {
     return Math.max(0, net * 0.2);
   }, [monthlyIncome, totalExpensesWithFixed]);
 
-  async function handleAddMonthlySavings() {
-    if (!sheetId || alreadyAdded || suggestedSavings <= 0) return;
-
-    setIsSubmitting(true);
-    try {
-      const today = new Date().toISOString().split("T")[0];
-      await createTransaction.mutateAsync({
-        fecha: today,
-        concepto: "Ahorro del mes",
-        tipo: "Ahorro",
-        categoria: "Ahorro general",
-        importe: suggestedSavings,
-        metodo: "",
-        cuentaOrigen: "",
-        cuentaDestino: "",
-        notas: "Ahorro propuesto segun plan de ahorro",
-        reservaId: "",
-      });
-      addMonthlySavingsMonth(currentMonth);
-    } catch (e) {
-      console.error("Error adding monthly savings:", e);
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
   const activeReserves = (reserves ?? []).filter((r) => r.activo === "S");
   const activeGoals = (goals ?? []).filter((g) => g.estado === "Activo");
   const activeFutures = (futures ?? []).filter((f) => f.activo === "S");
   const activeDeferred = (deferred ?? []).filter((d) => d.estado === "Activo");
+
+  const { data: balances } = useTargetBalances(sheetId, {
+    reserves: activeReserves.map((r) => ({
+      reservaId: r.reservaId,
+      saldoActual: r.saldoActual,
+    })),
+    goals: activeGoals.map((g) => ({
+      objetivoId: g.objetivoId,
+      saldoActual: g.saldoActual,
+    })),
+    futurePayments: activeFutures.map((f) => ({
+      pagoId: f.pagoId,
+      saldoReservado: f.saldoReservado,
+    })),
+  });
+
+  const balanceMap = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const b of balances ?? []) {
+      map.set(`${b.tipoDestino}::${b.destinoId}`, b.effectiveBalance);
+    }
+    return map;
+  }, [balances]);
+
+  function effectiveBalance(
+    tipoDestino: "reserva" | "objetivo" | "pago_futuro",
+    destinoId: string,
+    manual: number,
+  ): number {
+    return balanceMap.get(`${tipoDestino}::${destinoId}`) ?? manual;
+  }
 
   const hasAnyItems =
     activeReserves.length > 0 ||
@@ -141,22 +147,15 @@ export function SavingsPanelExpanded() {
     activeFutures.length > 0 ||
     activeDeferred.length > 0;
 
-  const totalSaved =
-    activeReserves.reduce((acc, r) => acc + r.saldoActual, 0) +
-    activeGoals.reduce((acc, g) => acc + g.saldoActual, 0) +
-    activeFutures.reduce((acc, f) => acc + f.saldoReservado, 0);
-
-  const totalTarget =
-    activeReserves.reduce((acc, r) => acc + r.importeObjetivo, 0) +
-    activeGoals.reduce((acc, g) => acc + g.importeObjetivo, 0) +
-    activeFutures.reduce((acc, f) => acc + f.importeObjetivo, 0);
+  const totalSaved = savings.totalSaved;
+  const totalTarget = savings.totalTarget;
 
   const allItems: SavingsItemProps[] = [
     ...activeReserves.map((r) => ({
       icon: PiggyBank,
       name: r.nombre,
       subtitle: r.tipo,
-      saved: r.saldoActual,
+      saved: effectiveBalance("reserva", r.reservaId, r.saldoActual),
       target: r.importeObjetivo,
       monthlyNeeded: r.aporteMensualSugerido,
       colorClass: "text-savings",
@@ -166,7 +165,7 @@ export function SavingsPanelExpanded() {
       icon: Target,
       name: g.nombre,
       subtitle: g.fechaObjetivo ? `Objetivo: ${g.fechaObjetivo}` : g.tipo,
-      saved: g.saldoActual,
+      saved: effectiveBalance("objetivo", g.objetivoId, g.saldoActual),
       target: g.importeObjetivo,
       monthlyNeeded: g.aporteMensual,
       colorClass: "text-income",
@@ -176,7 +175,7 @@ export function SavingsPanelExpanded() {
       icon: Clock,
       name: f.concepto,
       subtitle: f.fechaVencimiento ? `Vence: ${f.fechaVencimiento}` : f.categoria,
-      saved: f.saldoReservado,
+      saved: effectiveBalance("pago_futuro", f.pagoId, f.saldoReservado),
       target: f.importeObjetivo,
       monthlyNeeded: f.aporteMensual,
       colorClass: "text-warning",
@@ -227,28 +226,58 @@ export function SavingsPanelExpanded() {
         )}
 
         <div className="border-t border-border/50 pt-3 space-y-2">
-          {incomeType === "fixed" && monthlyIncome > 0 && !alreadyAdded && suggestedSavings > 0 && (
-            <Button
-              onClick={handleAddMonthlySavings}
-              disabled={isSubmitting}
-              size="sm"
-              className="w-full gap-2 bg-savings hover:bg-savings/90"
-            >
-              <PiggyBank className="h-4 w-4" />
-              {isSubmitting
-                ? "Guardando..."
-                : `Añadir ahorro del mes (+${suggestedSavings.toFixed(2)} €)`}
-            </Button>
-          )}
-          {alreadyAdded && (
-            <div className="flex items-center gap-2 justify-center py-2 text-sm text-savings">
-              <CheckCircle2 className="h-4 w-4" />
-              <span className="font-medium">Ahorro del mes completado</span>
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="rounded-md bg-card border border-border/50 p-2">
+              <p className="text-muted-foreground uppercase tracking-wide">
+                Mes en curso
+              </p>
+              <p className="text-sm font-semibold text-savings mt-0.5">
+                +{monthlySavings.totalForMonth.toFixed(2)} €
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Plan: {monthlySavings.planned.toFixed(2)}
+              </p>
             </div>
-          )}
+            <div className="rounded-md bg-card border border-border/50 p-2">
+              <p className="text-muted-foreground uppercase tracking-wide">
+                Disponible
+              </p>
+              <p
+                className={cn(
+                  "text-sm font-semibold mt-0.5",
+                  available.available >= 0 ? "text-income" : "text-expense",
+                )}
+              >
+                {available.available >= 0 ? "+" : ""}
+                {available.available.toFixed(2)} €
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Plan sugerido: {suggestedSavings.toFixed(2)}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex gap-2">
+            <Button
+              asChild
+              size="sm"
+              className="flex-1 gap-2 bg-savings hover:bg-savings/90"
+            >
+              <Link href="/savings/monthly">
+                <CalendarCheck className="h-4 w-4" />
+                Confirmar ahorro del mes
+              </Link>
+            </Button>
+            <Button asChild size="sm" variant="outline" className="flex-1 gap-2">
+              <Link href="/savings">
+                <PiggyBank className="h-4 w-4" />
+                Aportar / Retirar
+              </Link>
+            </Button>
+          </div>
           {incomeType === "variable" && (
             <p className="text-xs text-center text-muted-foreground">
-              Con ingresos variables, añade el ahorro manualmente desde el botón +.
+              Con ingresos variables, registra el ahorro desde cada destino.
             </p>
           )}
         </div>

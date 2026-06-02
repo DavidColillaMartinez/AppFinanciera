@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,7 @@ import { useGoals, useDeleteGoal } from "@/features/goals/hooks/use-goals";
 import { useFuturePayments, useDeleteFuturePayment } from "@/features/future-payments/hooks/use-future-payments";
 import { useDeferredPayments, useDeleteDeferredPayment } from "@/features/deferred-payments/hooks/use-deferred-payments";
 import { useFixedExpenses, useDeleteFixedExpense } from "@/features/fixed-expenses/hooks/use-fixed-expenses";
+import { useTargetBalances } from "@/features/savings/hooks/use-savings";
 import { EmptyState } from "@/components/states/empty-state";
 import { LoadingState } from "@/components/states/loading-state";
 import { ErrorState } from "@/components/states/error-state";
@@ -20,7 +22,8 @@ import { FuturePaymentForm } from "@/features/future-payments/components/future-
 import { DeferredPaymentForm } from "@/features/deferred-payments/components/deferred-payment-form";
 import { FixedExpenseForm } from "@/features/fixed-expenses/components/fixed-expense-form";
 import { ReserveMovements } from "@/features/reserve-movements/components/reserve-movements-list";
-import { Pencil, Trash2, Plus, History } from "lucide-react";
+import { SavingsMovementForm } from "@/features/savings/components/savings-movement-form";
+import { Pencil, Trash2, Plus, History, ArrowDownLeft, CalendarCheck } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -50,6 +53,12 @@ export default function SavingsPage() {
   const [showFixedForm, setShowFixedForm] = useState(false);
   const [editingFixed, setEditingFixed] = useState<FixedExpenseRow | null>(null);
   const [viewingMovements, setViewingMovements] = useState<{ id: string; nombre: string } | null>(null);
+  const [contributeTarget, setContributeTarget] = useState<{
+    tipoDestino: "reserva" | "objetivo" | "pago_futuro";
+    destinoId: string;
+    reservaId: string;
+    nombre: string;
+  } | null>(null);
 
   const {
     data: reserves,
@@ -87,6 +96,41 @@ export default function SavingsPage() {
   const deleteFuture = useDeleteFuturePayment(sheetId);
   const deleteDeferred = useDeleteDeferredPayment(sheetId);
   const deleteFixed = useDeleteFixedExpense(sheetId);
+
+  const activeReserves = (reserves ?? []).filter((r) => r.activo === "S");
+  const activeGoals = (goals ?? []).filter((g) => g.estado === "Activo");
+  const activeFutures = (futures ?? []).filter((f) => f.activo === "S");
+
+  const { data: balances } = useTargetBalances(sheetId, {
+    reserves: activeReserves.map((r) => ({
+      reservaId: r.reservaId,
+      saldoActual: r.saldoActual,
+    })),
+    goals: activeGoals.map((g) => ({
+      objetivoId: g.objetivoId,
+      saldoActual: g.saldoActual,
+    })),
+    futurePayments: activeFutures.map((f) => ({
+      pagoId: f.pagoId,
+      saldoReservado: f.saldoReservado,
+    })),
+  });
+
+  const balanceMap = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const b of balances ?? []) {
+      map.set(`${b.tipoDestino}::${b.destinoId}`, b.effectiveBalance);
+    }
+    return map;
+  }, [balances]);
+
+  function effectiveBalance(
+    tipoDestino: "reserva" | "objetivo" | "pago_futuro",
+    destinoId: string,
+    manual: number,
+  ): number {
+    return balanceMap.get(`${tipoDestino}::${destinoId}`) ?? manual;
+  }
 
   const tabs: { id: Tab; label: string }[] = [
     { id: "reservas", label: "Reservas" },
@@ -130,10 +174,18 @@ export default function SavingsPage() {
             Planificación financiera futura
           </p>
         </div>
-        <Button size="sm" className="gap-2" onClick={handleAdd}>
-          <Plus className="h-4 w-4" />
-          Nuevo
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button asChild size="sm" variant="outline" className="gap-2">
+            <Link href="/savings/monthly">
+              <CalendarCheck className="h-4 w-4" />
+              Mes
+            </Link>
+          </Button>
+          <Button size="sm" className="gap-2" onClick={handleAdd}>
+            <Plus className="h-4 w-4" />
+            Nuevo
+          </Button>
+        </div>
       </div>
 
       <div className="flex gap-2 border-b overflow-x-auto">
@@ -168,9 +220,10 @@ export default function SavingsPage() {
           {!loadingReserves && !errorReserves && reserves && reserves.length > 0 && (
             <div className="space-y-2">
               {reserves.map((reserve) => {
+                const saved = effectiveBalance("reserva", reserve.reservaId, reserve.saldoActual);
                 const progress =
                   reserve.importeObjetivo > 0
-                    ? (reserve.saldoActual / reserve.importeObjetivo) * 100
+                    ? Math.min((saved / reserve.importeObjetivo) * 100, 100)
                     : 0;
                 return (
                   <Card key={reserve.reservaId} className="overflow-hidden transition-all hover:shadow-md">
@@ -222,15 +275,33 @@ export default function SavingsPage() {
                           </div>
                         </div>
                         <div className="flex justify-between text-sm">
-                          <span>{reserve.saldoActual.toFixed(2)}</span>
+                          <span>{saved.toFixed(2)}</span>
                           <span className="text-muted-foreground">
                             / {reserve.importeObjetivo.toFixed(2)}
                           </span>
                         </div>
                         <Progress value={progress} className="h-2" />
-                        <p className="text-xs text-muted-foreground">
-                          {progress.toFixed(1)}% · Aporte: {reserve.aporteMensualSugerido.toFixed(2)}/mes
-                        </p>
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs text-muted-foreground">
+                            {progress.toFixed(1)}% · Aporte: {reserve.aporteMensualSugerido.toFixed(2)}/mes
+                          </p>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 gap-1 text-xs"
+                            onClick={() =>
+                              setContributeTarget({
+                                tipoDestino: "reserva",
+                                destinoId: reserve.reservaId,
+                                reservaId: reserve.reservaId,
+                                nombre: reserve.nombre,
+                              })
+                            }
+                          >
+                            <ArrowDownLeft className="h-3 w-3" />
+                            Aportar
+                          </Button>
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
@@ -257,9 +328,10 @@ export default function SavingsPage() {
           {!loadingGoals && !errorGoals && goals && goals.length > 0 && (
             <div className="space-y-2">
               {goals.map((goal) => {
+                const saved = effectiveBalance("objetivo", goal.objetivoId, goal.saldoActual);
                 const progress =
                   goal.importeObjetivo > 0
-                    ? (goal.saldoActual / goal.importeObjetivo) * 100
+                    ? Math.min((saved / goal.importeObjetivo) * 100, 100)
                     : 0;
                 return (
                   <Card key={goal.objetivoId} className="overflow-hidden transition-all hover:shadow-md">
@@ -301,15 +373,33 @@ export default function SavingsPage() {
                           </div>
                         </div>
                         <div className="flex justify-between text-sm">
-                          <span>{goal.saldoActual.toFixed(2)}</span>
+                          <span>{saved.toFixed(2)}</span>
                           <span className="text-muted-foreground">
                             / {goal.importeObjetivo.toFixed(2)}
                           </span>
                         </div>
                         <Progress value={progress} className="h-2" />
-                        <p className="text-xs text-muted-foreground">
-                          {progress.toFixed(1)}% del objetivo
-                        </p>
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs text-muted-foreground">
+                            {progress.toFixed(1)}% del objetivo
+                          </p>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 gap-1 text-xs"
+                            onClick={() =>
+                              setContributeTarget({
+                                tipoDestino: "objetivo",
+                                destinoId: goal.objetivoId,
+                                reservaId: goal.objetivoId,
+                                nombre: goal.nombre,
+                              })
+                            }
+                          >
+                            <ArrowDownLeft className="h-3 w-3" />
+                            Aportar
+                          </Button>
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
@@ -336,9 +426,14 @@ export default function SavingsPage() {
           {!loadingFutures && !errorFutures && futures && futures.length > 0 && (
             <div className="space-y-2">
               {futures.map((payment) => {
+                const saved = effectiveBalance(
+                  "pago_futuro",
+                  payment.pagoId,
+                  payment.saldoReservado,
+                );
                 const progress =
                   payment.importeObjetivo > 0
-                    ? (payment.saldoReservado / payment.importeObjetivo) * 100
+                    ? Math.min((saved / payment.importeObjetivo) * 100, 100)
                     : 0;
                 return (
                   <Card key={payment.pagoId} className="overflow-hidden transition-all hover:shadow-md">
@@ -379,15 +474,33 @@ export default function SavingsPage() {
                           </div>
                         </div>
                         <div className="flex justify-between text-sm">
-                          <span>{payment.saldoReservado.toFixed(2)}</span>
+                          <span>{saved.toFixed(2)}</span>
                           <span className="text-muted-foreground">
                             / {payment.importeObjetivo.toFixed(2)}
                           </span>
                         </div>
                         <Progress value={progress} className="h-2" />
-                        <p className="text-xs text-muted-foreground">
-                          {progress.toFixed(1)}% · Aporte: {payment.aporteMensual.toFixed(2)}/mes
-                        </p>
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs text-muted-foreground">
+                            {progress.toFixed(1)}% · Aporte: {payment.aporteMensual.toFixed(2)}/mes
+                          </p>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 gap-1 text-xs"
+                            onClick={() =>
+                              setContributeTarget({
+                                tipoDestino: "pago_futuro",
+                                destinoId: payment.pagoId,
+                                reservaId: payment.pagoId,
+                                nombre: payment.concepto,
+                              })
+                            }
+                          >
+                            <ArrowDownLeft className="h-3 w-3" />
+                            Aportar
+                          </Button>
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
@@ -663,6 +776,28 @@ export default function SavingsPage() {
               reservaId={viewingMovements.id}
               reservaNombre={viewingMovements.nombre}
               onClose={() => setViewingMovements(null)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!contributeTarget}
+        onOpenChange={(open) => !open && setContributeTarget(null)}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Nuevo movimiento</DialogTitle>
+          </DialogHeader>
+          {contributeTarget && (
+            <SavingsMovementForm
+              sheetId={sheetId}
+              tipoDestino={contributeTarget.tipoDestino}
+              destinoId={contributeTarget.destinoId}
+              reservaId={contributeTarget.reservaId}
+              destinoNombre={contributeTarget.nombre}
+              onSuccess={() => setContributeTarget(null)}
+              onCancel={() => setContributeTarget(null)}
             />
           )}
         </DialogContent>

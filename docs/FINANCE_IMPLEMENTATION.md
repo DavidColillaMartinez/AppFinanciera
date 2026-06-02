@@ -86,27 +86,63 @@ live in `docs/FINANCE_AUDIT.md`.
 - **Template update required**: no — Config sheet already exists; row is added on first confirmation.
 - **See**: `FINANCE_AUDIT.md` A4.
 
-## Phase 7 — Savings ledger / `Mov_reservas` — `pending`
+## Phase 7 — Savings ledger / `Mov_reservas` — `implemented`
 
 - **Purpose**: make `Mov_reservas` the single source of truth for savings balances;
   switch the saving flows to write to the ledger; support contributions and
-  withdrawals across reserves, goals and future payments.
-- **Pending goals**:
-  - `Mov_reservas` is the single source of truth for `Reservas.saldoActual`, `Objetivos.saldoActual` and `Pagos_futuros.saldoReservado`.
-  - Stop using generic `Ahorro` movements as the main saving truth.
-  - Support `tipoDestino = reserva | objetivo | pago_futuro` and `tipoMovimiento = aporte | retirada`.
-  - Saving flow writes a `Mov_reservas` row and keeps the corresponding `Movimientos` row only as audit.
-  - Future payment contributions also write to `Mov_reservas` with `tipoDestino = pago_futuro`.
-  - "Ahorro del mes" button on the dashboard creates both a ledger row and updates the target balance.
-  - Derive balances from the ledger when the ledger is non-empty; the manual `saldoActual` field becomes read-only / display-only.
-- **Reuses**: the engine already prefers the ledger; the existing headers (`mesClave`, `tipoDestino`, `destinoId`) are in place since Phase 3.
-- **Likely files**:
-  - `src/features/reserve-movements/hooks/use-reserve-movements.ts`
-  - `src/components/dashboard/savings-panel-expanded.tsx`
-  - `src/features/transactions/components/transaction-form.tsx` (Ahorro branch)
-  - `src/features/reserves/hooks/use-reserves.ts` (read-only `saldoActual`)
-  - `src/features/goals/hooks/use-goals.ts` (read-only `saldoActual`)
-  - `src/features/future-payments/hooks/use-future-payments.ts` (`tipoDestino = pago_futuro` in contributions)
+  withdrawals across reserves, goals and future payments; add monthly planned
+  saving confirmation.
+- **Main files**:
+  - `src/lib/finance/savings-ledger.ts` — pure helpers (`buildContributionId`,
+    `buildWithdrawalId`, `buildMonthlyPlannedSavingId`, `isLedgerEntry`,
+    `isMonthlyPlannedSavingId`, `getEntriesForTarget`, `getEntriesForMonth`,
+    `getEntriesForTargetAndMonth`, `calculateLedgerBalance`,
+    `calculateLedgerMonthlyTotal`, `calculateLedgerBreakdownByMonth`,
+    `hasMonthlyPlannedSaving`, `getActiveMovements`, `normalizeTipoMovimiento`,
+    `normalizeTipoDestino`, `rowToReserveMovement`) and service functions
+    (`readAllReserveMovements`, `createSavingsContribution`,
+    `createSavingsWithdrawal`, `confirmMonthlyPlannedSaving`,
+    `unconfirmMonthlyPlannedSaving`, `updateReserveMovement`,
+    `softDeleteReserveMovement`).
+  - `src/features/savings/hooks/use-savings.ts` — React Query wrappers
+    (`useAllReserveMovements`, `useTargetReserveMovements`,
+    `useCreateSavingsContribution`, `useCreateSavingsWithdrawal`,
+    `useConfirmMonthlyPlannedSaving`, `useUnconfirmMonthlyPlannedSaving`,
+    `useUpdateReserveMovement`, `useDeleteReserveMovement`,
+    `useMonthlySavingStatus`, `usePlannedMonthlyTargets`, `useTargetBalances`,
+    `useTargetBalance`) plus the pure `computeTargetBalances` helper.
+  - `src/features/savings/components/savings-movement-form.tsx` — generic
+    form used for any target type (reserve, goal, future payment). Handles
+    aporte and retirada.
+  - `src/app/savings/monthly/page.tsx` — monthly planned saving confirmation
+    screen (month selector, per-target edit, bulk confirm, per-target
+    unconfirm, deterministic ID).
+  - `src/features/reserve-movements/hooks/use-reserve-movements.ts` — legacy
+    hook re-exports + `useReserveMovements(sheetId, reservaId)` filter kept
+    for backward compatibility; new ledger hooks are re-exported from
+    `@/features/savings/hooks/use-savings`.
+  - `src/lib/finance/finance-engine.ts` — added `isLedgerEntry` predicate;
+    `getMonthlySavings` and the per-target balance helpers use
+    `getActiveMovements` and exclude `Ahorro` movements whose `id` starts with
+    `LEDGER-` to prevent double counting.
+  - `src/components/dashboard/savings-panel-expanded.tsx` — refactored to
+    read balances from the engine, replace the legacy "Ahorro del mes" button
+    with links to `/savings/monthly` and `/savings`.
+  - `src/app/savings/page.tsx`, `src/app/goals/page.tsx`,
+    `src/app/future-payments/page.tsx` — added an `Aportar` button per item
+    that opens the generic `SavingsMovementForm` dialog; the per-item balance
+    is now derived from the ledger.
+- **ID conventions**:
+  - `LEDGER-CONTRIB-<tipoDestino>-YYYY-MM-<destinoId>-<timestamp>` — one-off
+    aporte (timestamp-based, no duplicate prevention needed).
+  - `LEDGER-WITHDRAW-<tipoDestino>-YYYY-MM-<destinoId>-<timestamp>` — one-off
+    retirada.
+  - `LEDGER-MONTHLY-YYYY-MM-<tipoDestino>-<destinoId>` — monthly planned
+    saving confirmation (deterministic; upsert on confirm).
+  - Soft-delete: `tipoMovimiento = "Eliminado"`. The engine ignores these rows.
+- **Reuses**: the engine already preferred the ledger; the existing headers
+  (`mesClave`, `tipoDestino`, `destinoId`) were in place since Phase 3.
+- **Template update required**: no.
 - **See**: `FINANCE_AUDIT.md` A5, A7, A8.
 
 ## Phase 8 — Dashboard metrics using the engine — `pending`
@@ -195,7 +231,7 @@ live in `docs/FINANCE_AUDIT.md`.
 | 4 | Central finance engine | implemented |
 | 5 | Salary / payroll | implemented |
 | 6 | Fixed expenses monthly confirmation | implemented |
-| 7 | Savings ledger (`Mov_reservas`) | pending |
+| 7 | Savings ledger (`Mov_reservas`) | implemented |
 | 8 | Dashboard metrics using the engine | pending |
 | 9 | Forms and movement flows | pending |
 | 10 | Google session and Sheet connection recovery | pending |

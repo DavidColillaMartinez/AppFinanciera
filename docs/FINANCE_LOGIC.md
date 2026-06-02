@@ -182,7 +182,10 @@ not be mixed with normal spending.
 
 - Destinations: emergency fund, safety cushion, reserves, goals, future payments,
   investment fund, personal wants.
-- The app stores historical contributions and withdrawals for multi-year savings.
+- The app stores historical contributions and withdrawals in the
+  `Mov_reservas` ledger (see §6). The manual `saldoActual` / `saldoReservado`
+  fields on the parent rows are kept for backward compatibility; the engine
+  prefers the ledger when it has entries for a target.
 
 ### 5.1 General savings (dashboard card)
 
@@ -194,23 +197,76 @@ not be mixed with normal spending.
 
 - Planned for this month, saved so far, distribution across reserves, goals and
   future payments, completion status.
+- "Ahorro del mes" no longer creates a generic `Ahorro` movement; the monthly
+  confirmation flow writes ledger rows directly (see §5.3).
 
-### 5.3 Monthly saving confirmation
+### 5.3 Monthly saving confirmation (implemented Phase 7)
 
-A "Mark this month's saving as done" flow must exist. The same monthly saving
-must not be confirmed twice unless the user explicitly edits / reverts it.
+- Screen: `/savings/monthly` (reachable from `/savings` and from the dashboard
+  savings panel).
+- The user picks a month. The app lists every active target (reserve, goal,
+  future payment) with a non-zero `aporteMensual*` field.
+- Each row shows the planned amount; the user can edit the amount inline and
+  confirm. "Confirmar todos los pendientes" performs the bulk action.
+- "Desconfirmar" soft-deletes the monthly row and re-runs the dashboard.
+- IDs are deterministic per `(monthKey, tipoDestino, destinoId)` to make
+  confirmation idempotent.
 
-## 6. `Mov_reservas` ledger
+## 6. `Mov_reservas` ledger (implemented Phase 7)
 
-- The official savings ledger. Phase 7 makes it the source of truth for balances.
+- The official savings ledger. Source of truth for `Reservas.saldoActual`,
+  `Objetivos.saldoActual` and `Pagos_futuros.saldoReservado`.
 - Fields: `id`, `fecha`, `mesClave`, `tipoDestino`, `destinoId`, `reservaId`,
   `tipoMovimiento`, `importe`, `cuentaOrigen`, `cuentaDestino`, `notas`,
   `createdAt`, `updatedAt`.
 - `tipoDestino` ∈ `reserva | objetivo | pago_futuro`.
 - `tipoMovimiento` ∈ `aporte | retirada`.
+- Soft-deletes use `tipoMovimiento = "Eliminado"`. The engine ignores
+  soft-deleted rows.
 - The engine prefers the ledger and falls back to the manual `saldoActual` /
   `saldoReservado` field for backward compatibility.
-- Phase 7 redirect: all contribution / withdrawal flows write here.
+
+### 6.1 ID conventions
+
+```
+One-off aporte reserve:  LEDGER-CONTRIB-reserva-YYYY-MM-<reservaId>-<timestamp>
+One-off aporte goal:     LEDGER-CONTRIB-objetivo-YYYY-MM-<objetivoId>-<timestamp>
+One-off aporte pago:     LEDGER-CONTRIB-pago_futuro-YYYY-MM-<pagoId>-<timestamp>
+One-off retirada:        LEDGER-WITHDRAW-<tipoDestino>-YYYY-MM-<destinoId>-<timestamp>
+Monthly planned saving:  LEDGER-MONTHLY-YYYY-MM-<tipoDestino>-<destinoId>
+```
+
+- One-off contributions and withdrawals use timestamp-based IDs (no duplicate
+  prevention needed because the timestamp is unique per click).
+- Monthly planned savings use deterministic IDs; saving twice updates the same
+  row instead of duplicating.
+- `isLedgerEntry(m)` matches `id.startsWith("LEDGER-")`. Used by
+  `getMonthlySavings` to exclude ledger audit rows from the generic `Ahorro`
+  bucket and prevent double counting.
+
+### 6.2 Reads and writes
+
+- Pure helpers in `src/lib/finance/savings-ledger.ts`:
+  `buildContributionId`, `buildWithdrawalId`, `buildMonthlyPlannedSavingId`,
+  `isLedgerEntry`, `isMonthlyPlannedSavingId`, `getEntriesForTarget`,
+  `getEntriesForMonth`, `getEntriesForTargetAndMonth`, `calculateLedgerBalance`,
+  `calculateLedgerMonthlyTotal`, `calculateLedgerBreakdownByMonth`,
+  `hasMonthlyPlannedSaving`, `getActiveMovements`, `normalizeTipoMovimiento`,
+  `normalizeTipoDestino`, `rowToReserveMovement`.
+- Service functions in `src/lib/finance/savings-ledger.ts`:
+  `readAllReserveMovements`, `createSavingsContribution`,
+  `createSavingsWithdrawal`, `confirmMonthlyPlannedSaving`,
+  `unconfirmMonthlyPlannedSaving`, `updateReserveMovement`,
+  `softDeleteReserveMovement`.
+- React Query hooks in `src/features/savings/hooks/use-savings.ts`:
+  `useAllReserveMovements`, `useTargetReserveMovements`,
+  `useCreateSavingsContribution`, `useCreateSavingsWithdrawal`,
+  `useConfirmMonthlyPlannedSaving`, `useUnconfirmMonthlyPlannedSaving`,
+  `useUpdateReserveMovement`, `useDeleteReserveMovement`,
+  `useMonthlySavingStatus`, `usePlannedMonthlyTargets`,
+  `useTargetBalances`, `useTargetBalance`.
+- A generic contribution form (`SavingsMovementForm`) is used for reserves,
+  goals and future payments, picking the right `tipoDestino`.
 
 ## 7. Accounts model
 
@@ -335,7 +391,7 @@ required structure is present. Visual formatting is irrelevant.
 - Phase 4 — central finance engine — **implemented**.
 - Phase 5 — salary / payroll — **implemented**.
 - Phase 6 — fixed expenses monthly confirmation — **implemented**.
-- Phase 7 — `Mov_reservas` savings ledger — **pending (next critical phase)**.
+- Phase 7 — `Mov_reservas` savings ledger — **implemented**.
 - Phase 8 — dashboard metrics using the engine — pending.
 - Phase 9 — forms and movement flows — pending.
 - Phase 10 — Google session and Sheet connection recovery — pending.
@@ -345,14 +401,4 @@ Full phase details, files touched and conventions: `docs/FINANCE_IMPLEMENTATION.
 
 ## 15. Next phase pointer
 
-**Phase 7 — Savings ledger / `Mov_reservas`.**
-
-Pending goals:
-
-- make `Mov_reservas` the official savings ledger;
-- stop using generic `Ahorro` movements as the main saving truth;
-- support contributions and withdrawals (`aporte | retirada`);
-- support `tipoDestino = reserva | objetivo | pago_futuro`;
-- derive balances from the ledger when possible;
-- update reserve, goal and future payment flows to write ledger rows;
-- prepare the dashboard for general savings and monthly savings.
+**Phase 8 — Dashboard metrics using the engine.**

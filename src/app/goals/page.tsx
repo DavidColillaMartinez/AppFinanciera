@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { useReserves, useDeleteReserve } from "@/features/reserves/hooks/use-reserves";
 import { useGoals, useDeleteGoal } from "@/features/goals/hooks/use-goals";
+import { useTargetBalances } from "@/features/savings/hooks/use-savings";
 import { useAppStore } from "@/stores/app-store";
 import { EmptyState } from "@/components/states/empty-state";
 import { LoadingState } from "@/components/states/loading-state";
@@ -14,7 +15,8 @@ import { ErrorState } from "@/components/states/error-state";
 import { ReserveForm } from "@/features/reserves/components/reserve-form";
 import { GoalForm } from "@/features/goals/components/goal-form";
 import { ReserveMovements } from "@/features/reserve-movements/components/reserve-movements-list";
-import { Pencil, Trash2, Plus, History } from "lucide-react";
+import { SavingsMovementForm } from "@/features/savings/components/savings-movement-form";
+import { Pencil, Trash2, Plus, History, ArrowDownLeft } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -35,6 +37,11 @@ export default function GoalsPage() {
   const [showGoalForm, setShowGoalForm] = useState(false);
   const [editingGoal, setEditingGoal] = useState<GoalRow | null>(null);
   const [viewingMovements, setViewingMovements] = useState<{ id: string; nombre: string } | null>(null);
+  const [contributeTarget, setContributeTarget] = useState<{
+    tipoDestino: "reserva" | "objetivo";
+    destinoId: string;
+    nombre: string;
+  } | null>(null);
 
   const {
     data: reserves,
@@ -50,6 +57,27 @@ export default function GoalsPage() {
   } = useGoals(sheetId);
   const deleteReserve = useDeleteReserve(sheetId);
   const deleteGoal = useDeleteGoal(sheetId);
+
+  const activeReserves = (reserves ?? []).filter((r) => r.activo === "S");
+  const activeGoals = (goals ?? []).filter((g) => g.estado === "Activo");
+  const { data: balances } = useTargetBalances(sheetId, {
+    reserves: activeReserves.map((r) => ({
+      reservaId: r.reservaId,
+      saldoActual: r.saldoActual,
+    })),
+    goals: activeGoals.map((g) => ({
+      objetivoId: g.objetivoId,
+      saldoActual: g.saldoActual,
+    })),
+  });
+
+  const balanceMap = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const b of balances ?? []) {
+      map.set(`${b.tipoDestino}::${b.destinoId}`, b.effectiveBalance);
+    }
+    return map;
+  }, [balances]);
 
   const isLoading = activeTab === "reservas" ? loadingReserves : loadingGoals;
   const isError = activeTab === "reservas" ? errorReserves : errorGoals;
@@ -171,9 +199,10 @@ export default function GoalsPage() {
         reserves.length > 0 && (
           <div className="space-y-2">
             {reserves.map((reserve) => {
+              const saved = balanceMap.get(`reserva::${reserve.reservaId}`) ?? reserve.saldoActual;
               const progress =
                 reserve.importeObjetivo > 0
-                  ? (reserve.saldoActual / reserve.importeObjetivo) * 100
+                  ? Math.min((saved / reserve.importeObjetivo) * 100, 100)
                   : 0;
 
               return (
@@ -210,7 +239,7 @@ export default function GoalsPage() {
                         </div>
                       </div>
                       <div className="flex justify-between text-sm">
-                        <span>{reserve.saldoActual.toFixed(2)}</span>
+                        <span>{saved.toFixed(2)}</span>
                         <span className="text-muted-foreground">
                           / {reserve.importeObjetivo.toFixed(2)}
                         </span>
@@ -221,20 +250,37 @@ export default function GoalsPage() {
                           {progress.toFixed(1)}% · Aporte sugerido:{" "}
                           {reserve.aporteMensualSugerido.toFixed(2)}/mes
                         </p>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 gap-1 text-xs"
-                          onClick={() =>
-                            setViewingMovements({
-                              id: reserve.reservaId,
-                              nombre: reserve.nombre,
-                            })
-                          }
-                        >
-                          <History className="h-3 w-3" />
-                          Mov.
-                        </Button>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 gap-1 text-xs"
+                            onClick={() =>
+                              setContributeTarget({
+                                tipoDestino: "reserva",
+                                destinoId: reserve.reservaId,
+                                nombre: reserve.nombre,
+                              })
+                            }
+                          >
+                            <ArrowDownLeft className="h-3 w-3" />
+                            Aportar
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 gap-1 text-xs"
+                            onClick={() =>
+                              setViewingMovements({
+                                id: reserve.reservaId,
+                                nombre: reserve.nombre,
+                              })
+                            }
+                          >
+                            <History className="h-3 w-3" />
+                            Mov.
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   </CardContent>
@@ -251,9 +297,10 @@ export default function GoalsPage() {
         goals.length > 0 && (
           <div className="space-y-2">
             {goals.map((goal) => {
+              const saved = balanceMap.get(`objetivo::${goal.objetivoId}`) ?? goal.saldoActual;
               const progress =
                 goal.importeObjetivo > 0
-                  ? (goal.saldoActual / goal.importeObjetivo) * 100
+                  ? Math.min((saved / goal.importeObjetivo) * 100, 100)
                   : 0;
 
               return (
@@ -290,15 +337,32 @@ export default function GoalsPage() {
                         </div>
                       </div>
                       <div className="flex justify-between text-sm">
-                        <span>{goal.saldoActual.toFixed(2)}</span>
+                        <span>{saved.toFixed(2)}</span>
                         <span className="text-muted-foreground">
                           / {goal.importeObjetivo.toFixed(2)}
                         </span>
                       </div>
                       <Progress value={progress} className="h-2" />
-                      <p className="text-xs text-muted-foreground">
-                        {progress.toFixed(1)}% del objetivo
-                      </p>
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs text-muted-foreground">
+                          {progress.toFixed(1)}% del objetivo
+                        </p>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 gap-1 text-xs"
+                          onClick={() =>
+                            setContributeTarget({
+                              tipoDestino: "objetivo",
+                              destinoId: goal.objetivoId,
+                              nombre: goal.nombre,
+                            })
+                          }
+                        >
+                          <ArrowDownLeft className="h-3 w-3" />
+                          Aportar
+                        </Button>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
@@ -352,6 +416,28 @@ export default function GoalsPage() {
               reservaId={viewingMovements.id}
               reservaNombre={viewingMovements.nombre}
               onClose={() => setViewingMovements(null)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!contributeTarget}
+        onOpenChange={(open) => !open && setContributeTarget(null)}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Aportar / Retirar</DialogTitle>
+          </DialogHeader>
+          {contributeTarget && (
+            <SavingsMovementForm
+              sheetId={sheetId}
+              tipoDestino={contributeTarget.tipoDestino}
+              destinoId={contributeTarget.destinoId}
+              reservaId={contributeTarget.destinoId}
+              destinoNombre={contributeTarget.nombre}
+              onSuccess={() => setContributeTarget(null)}
+              onCancel={() => setContributeTarget(null)}
             />
           )}
         </DialogContent>

@@ -91,17 +91,19 @@ The official current rules live in `docs/FINANCE_LOGIC.md`. The phase history li
   - Stale `Config` keys for past months are not pruned. Acceptable because reads only run for the selected month.
 - **See**: `FINANCE_LOGIC.md` section 5.2.
 
-## A5. Future payments — `partially resolved` (engine created, ledger connection `pending` Phase 7)
+## A5. Future payments — `resolved` (Phase 7)
 
-- **Source**: `src/features/future-payments/*`, `src/lib/finance/chart-data.ts`, `src/lib/finance/finance-engine.ts`.
+- **Source**: `src/features/future-payments/*`, `src/features/savings/*`, `src/lib/finance/savings-ledger.ts`, `src/lib/finance/finance-engine.ts`.
 - **Original finding**:
   - `mesesRestantes` and `aporteMensual` were stored manually.
   - `saldoReservado` was not incremented automatically when the user logged a contribution.
   - Contributions were not written to `Mov_reservas` with `tipoDestino = "pago_futuro"`.
 - **Current state**:
   - The engine has `getFuturePaymentProvisions`, `getFuturePaymentProgress` and a fallback to derive `aporteMensual` from `importeObjetivo` and `mesesRestantes` when the field is missing.
-  - The saving form still writes a generic `Ahorro` movement. The savings ledger is not yet wired.
-- **Next step**: Phase 7 — connect contributions to `Mov_reservas` and treat the ledger as the source of truth.
+  - The future-payments page (`/future-payments`) exposes an `Aportar` button per item that opens the generic `SavingsMovementForm` and writes a `Mov_reservas` row with `tipoDestino = "pago_futuro"`.
+  - The engine reads the ledger (`getFuturePaymentMovements` + `sumMovementsBalance`) and falls back to the manual `saldoReservado` field for backward compatibility.
+  - `/savings/monthly` lists every active future payment with a non-zero `aporteMensual` and supports bulk / per-target confirmation.
+- **See**: `FINANCE_LOGIC.md` §6.
 
 ## A6. Deferred / installment payments — `partially resolved` (engine done, monthly auto-create `pending`)
 
@@ -114,31 +116,34 @@ The official current rules live in `docs/FINANCE_LOGIC.md`. The phase history li
   - The monthly movement is still not auto-created. There is no `TX-DEFER-YYYY-MM-aplazadoId` flow yet.
 - **Next step**: mirror the Phase 6 fixed-expenses pattern for installments. Tracked under Phase 7 (savings + installments share the same month-by-month confirmation design).
 
-## A7. Savings / reserves / goals — `pending` (Phase 7 + Phase 8)
+## A7. Savings / reserves / goals — `resolved` (Phase 7)
 
-- **Source**: `src/features/reserves/*`, `src/features/goals/*`, `src/components/dashboard/savings-panel-expanded.tsx`.
+- **Source**: `src/features/reserves/*`, `src/features/goals/*`, `src/features/savings/*`, `src/components/dashboard/savings-panel-expanded.tsx`, `src/app/savings/monthly/page.tsx`.
 - **Original finding**:
   - `saldoActual` on `Reservas` and `Objetivos` was updated manually.
   - The saving form could not allocate a contribution to a specific reserve or goal.
   - General savings and monthly savings were mixed in the dashboard panel.
 - **Current state**:
-  - The engine already prefers `Mov_reservas` for balances (with fallback to the manual `saldoActual` field).
-  - Forms still do not write to `Mov_reservas`; the "Ahorro del mes" button still writes a generic `Ahorro` movement.
-  - The dashboard has not been split into "Ahorro general" and "Ahorro del mes" yet.
-- **Next step**: Phase 7 — wire contributions to the ledger. Phase 8 — split the dashboard panel.
+  - The engine prefers `Mov_reservas` for balances and falls back to the manual `saldoActual` field (now derived via `getTargetLedgerBalance` in `finance-engine.ts`).
+  - `useTargetBalances` computes per-target balances from the ledger for the dashboard and per-item screens.
+  - `/savings` and `/goals` expose an `Aportar` button per item that opens the generic `SavingsMovementForm` and writes a `Mov_reservas` row with the right `tipoDestino`.
+  - The dashboard panel links to `/savings/monthly` for monthly confirmation and to `/savings` for one-off contributions; the legacy "Ahorro del mes" generic-movement button has been removed.
+  - `getMonthlySavings` no longer double counts: it ignores `Ahorro` movements whose `id` starts with `LEDGER-`.
+- **Next step**: Phase 8 will split the dashboard panel into "Ahorro general" and "Ahorro del mes" cards, expose an explanation modal behind "Disponible", and add account-role filters.
 
-## A8. `Mov_reservas` handling — `partially resolved` (headers added in Phase 3, writes `pending` Phase 7)
+## A8. `Mov_reservas` handling — `resolved` (Phase 7)
 
-- **Source**: `src/features/reserve-movements/*`, `src/constants/sheet-structure.ts` (`MOV_RESERVAS_HEADERS`).
+- **Source**: `src/features/reserve-movements/*`, `src/features/savings/*`, `src/lib/finance/savings-ledger.ts`, `src/lib/finance/finance-engine.ts`, `src/constants/sheet-structure.ts` (`MOV_RESERVAS_HEADERS`).
 - **Original finding**:
   - The header was missing `mesClave` and `tipoDestino` (required by the official model).
   - The savings form did not write a `Mov_reservas` row.
   - `Reservas.saldoActual` was not derived from `Mov_reservas`.
 - **Current state**:
-  - The headers now include `mesClave`, `tipoDestino`, `destinoId` and `updatedAt` (added in Phase 3).
-  - The engine reads the ledger and falls back to the manual field.
-  - Writes to the ledger are not yet implemented; saving flows still go through `Movimientos`.
-- **Next step**: Phase 7.
+  - The headers include `mesClave`, `tipoDestino`, `destinoId` and `updatedAt` (added in Phase 3).
+  - All contribution and withdrawal flows now write to `Mov_reservas` through `createSavingsContribution` / `createSavingsWithdrawal`. Reserve, goal and future payment flows use the same generic form.
+  - `Mov_reservas` is the source of truth: per-target balances, monthly planned savings, and dashboard "Ahorro general" all read from the ledger.
+  - The engine exposes `isLedgerEntry` and `getTargetLedgerBalance` to surface the ledger in calculations.
+- **See**: `FINANCE_LOGIC.md` §6.
 
 ## A9. Account logic — `partially resolved` (header added in Phase 3, role filter `pending` Phase 8)
 
