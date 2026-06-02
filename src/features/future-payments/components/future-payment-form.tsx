@@ -127,7 +127,7 @@ export function FuturePaymentForm({
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label htmlFor="categoria">Categoria</Label>
               <Input
@@ -159,7 +159,7 @@ export function FuturePaymentForm({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label htmlFor="fechaVencimiento">Fecha vencimiento</Label>
               <Input

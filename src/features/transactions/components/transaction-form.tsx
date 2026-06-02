@@ -213,7 +213,7 @@ export function TransactionForm({
           </div>
         )}
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <FormField label="Fecha" htmlFor="fecha" error={errors.fecha}>
               <Input id="fecha" type="date" className="h-11" {...register("fecha")} />
             </FormField>
@@ -379,7 +379,9 @@ export function TransactionForm({
           <div
             className={cn(
               "grid gap-4",
-              showPaymentMethod && showCuentaOrigen ? "grid-cols-2" : "grid-cols-1",
+              showPaymentMethod && showCuentaOrigen
+                ? "grid-cols-1 sm:grid-cols-2"
+                : "grid-cols-1",
             )}
           >
             {showCuentaOrigen && (

@@ -297,7 +297,7 @@ export default function ConfirmFixedExpensesPage() {
               onChange={(e) => changeMonth(e.target.value)}
             />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-0.5">
               <p className="text-xs uppercase tracking-wide text-amber-800 font-medium">
                 Pendientes
@@ -478,7 +478,7 @@ function PendingRow({
 
         {isEditing ? (
           <div className="space-y-3 rounded-lg border border-border p-3 bg-muted/30">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor={`importe-${fijo.fijoId}`}>Importe (€)</Label>
                 <Input
@@ -500,7 +500,7 @@ function PendingRow({
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor={`categoria-${fijo.fijoId}`}>Categoria</Label>
                 <select

@@ -135,7 +135,7 @@ export function CategoryForm({
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label htmlFor="tipoHabitual">Tipo</Label>
               <Select
@@ -173,7 +173,7 @@ export function CategoryForm({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label htmlFor="grupo">Grupo</Label>
               <Input

@@ -118,7 +118,7 @@ export default function GoalsPage() {
   }
 
   return (
-    <div className="px-4 py-6 space-y-4">
+    <div className="px-4 py-6 space-y-4 pb-24">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold tracking-tight">
           Reservas y Objetivos

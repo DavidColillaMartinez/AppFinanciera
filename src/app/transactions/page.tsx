@@ -202,7 +202,7 @@ function TransactionsContent() {
         </div>
       </div>
 
-      <div className="grid grid-cols-4 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         <Button
           size="sm"
           variant="income"
@@ -269,7 +269,7 @@ function TransactionsContent() {
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
         <Select
           options={typeOptions}
           value={filterType}
@@ -309,7 +309,7 @@ function TransactionsContent() {
         </div>
       )}
 
-      <div className="grid grid-cols-4 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         <Card className="card-income">
           <CardContent className="p-3">
             <p className="text-xs text-muted-foreground uppercase tracking-wide">

@@ -207,7 +207,7 @@ export default function MonthlySavingsPage() {
               }}
             />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-0.5">
               <p className="text-xs uppercase tracking-wide text-amber-800 font-medium">
                 Pendientes

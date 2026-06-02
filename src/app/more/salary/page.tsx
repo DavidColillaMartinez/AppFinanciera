@@ -235,7 +235,7 @@ export default function SalaryPage() {
 
           <div className="space-y-3">
             <Label>Tipo de nomina</Label>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <button
                 type="button"
                 onClick={() => setType("fixed")}
@@ -285,7 +285,7 @@ export default function SalaryPage() {
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label htmlFor="salary-day">Dia del mes</Label>
               <Input

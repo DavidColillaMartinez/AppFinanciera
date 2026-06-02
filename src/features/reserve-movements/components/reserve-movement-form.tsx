@@ -123,7 +123,7 @@ export function ReserveMovementForm({
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label htmlFor="tipoMovimiento">Tipo</Label>
               <Select
@@ -156,7 +156,7 @@ export function ReserveMovementForm({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label htmlFor="cuentaOrigen">Cuenta origen</Label>
               <Input

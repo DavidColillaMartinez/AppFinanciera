@@ -441,7 +441,7 @@ export default function VistaMesPage() {
           onClick={handleDisponibleClick}
           subtitle="Toca para ver el detalle"
         />
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <MetricCard
             title="Ingresos"
             value={`+${available.income.toFixed(2)}`}
@@ -469,7 +469,7 @@ export default function VistaMesPage() {
             subtitle="Ver movimientos del mes"
           />
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <MetricCard
             title="Ahorro general"
             value={`+${savingsSummary.totalSaved.toFixed(2)}`}
