@@ -43,6 +43,7 @@ export function useDeferredPayments(sheetId: string | null) {
       return rows.filter((r) => r.aplazadoId);
     },
     enabled: !!sheetId,
+    staleTime: 30_000,
   });
 }
 

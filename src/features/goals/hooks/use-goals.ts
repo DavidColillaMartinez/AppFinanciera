@@ -59,6 +59,7 @@ export function useGoals(sheetId: string | null) {
       return rows.filter((r) => r.objetivoId && r.estado !== "Cancelado");
     },
     enabled: !!sheetId,
+    staleTime: 30_000,
   });
 }
 

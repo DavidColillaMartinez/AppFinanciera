@@ -42,6 +42,7 @@ export function useFixedExpenses(sheetId: string | null) {
       return rows.filter((r) => r.fijoId && r.activo === "S");
     },
     enabled: !!sheetId,
+    staleTime: 30_000,
   });
 }
 

@@ -31,6 +31,7 @@ export function useConfig(sheetId: string | null) {
       return config;
     },
     enabled: !!sheetId,
+    staleTime: 30_000,
   });
 }
 

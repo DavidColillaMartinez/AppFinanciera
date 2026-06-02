@@ -50,6 +50,7 @@ export function useTransactions(sheetId: string | null, monthKey?: string) {
       return active;
     },
     enabled: !!sheetId,
+    staleTime: 10_000,
   });
 }
 

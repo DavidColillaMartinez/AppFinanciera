@@ -52,6 +52,7 @@ export function useAllReserveMovements(sheetId: string | null) {
       return readAllReserveMovements(sheetId);
     },
     enabled: !!sheetId,
+    staleTime: 30_000,
   });
 }
 

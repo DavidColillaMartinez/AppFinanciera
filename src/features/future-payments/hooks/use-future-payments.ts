@@ -42,6 +42,7 @@ export function useFuturePayments(sheetId: string | null) {
       return rows.filter((r) => r.pagoId && r.activo === "S");
     },
     enabled: !!sheetId,
+    staleTime: 30_000,
   });
 }
 

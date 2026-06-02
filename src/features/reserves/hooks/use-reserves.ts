@@ -56,6 +56,7 @@ export function useReserves(sheetId: string | null) {
       return rows.filter((r) => r.reservaId && r.activo === "S");
     },
     enabled: !!sheetId,
+    staleTime: 30_000,
   });
 }
 

@@ -49,6 +49,7 @@ export function useAccounts(sheetId: string | null) {
       return rows.filter((r) => r.cuentaId && r.activo === "S");
     },
     enabled: !!sheetId,
+    staleTime: 30_000,
   });
 }
 
@@ -107,7 +108,6 @@ export function useCreateAccount(sheetId: string | null) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
-      queryClient.invalidateQueries({ queryKey: ["transactions"] });
     },
   });
 }
@@ -173,7 +173,6 @@ export function useUpdateAccount(sheetId: string | null) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
-      queryClient.invalidateQueries({ queryKey: ["transactions"] });
     },
   });
 }
@@ -206,7 +205,6 @@ export function useDeleteAccount(sheetId: string | null) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["accounts"] });
-      queryClient.invalidateQueries({ queryKey: ["transactions"] });
     },
   });
 }
