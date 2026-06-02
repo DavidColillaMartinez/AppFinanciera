@@ -160,7 +160,7 @@ export const FIXED_CONFIG_KEYS = {
 
 export const FIRST_DATA_ROW = 2;
 
-export const TEMPLATE_VERSION = "1.0.0";
+export const TEMPLATE_VERSION = "1.1.0";
 export const APP_MIN_VERSION = "1.0.0";
 
 export type SheetName = (typeof SHEET_NAMES)[keyof typeof SHEET_NAMES];

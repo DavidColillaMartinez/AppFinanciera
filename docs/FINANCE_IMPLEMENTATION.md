@@ -33,7 +33,11 @@ live in `docs/FINANCE_AUDIT.md`.
 - **Key conventions**:
   - Additive columns only (do not break existing rows).
   - `required` headers are enforced; `recommended` headers only warn.
-- **Template update required**: yes — admin must add the new columns manually (or copy the app template).
+- **Template**: official `plantilla_base_finanzas_app.xlsx` ships at
+  `templateVersion = 1.1.0`. Includes the `Cuentas.rol` column, the full
+  `Mov_reservas` schema (with `mesClave`, `tipoDestino`, `destinoId`,
+  `updatedAt`) and the salary + `fixed.confirmed.YYYY-MM` Config keys.
+  Older templates keep working through recommended-only warnings.
 - **See**: `FINANCE_AUDIT.md` A10.
 
 ## Phase 4 — Central finance engine — `implemented`
