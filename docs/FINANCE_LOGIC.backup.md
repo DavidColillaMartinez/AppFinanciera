@@ -6,7 +6,7 @@ This document is the official financial logic source of truth for the app.
 
 The Google Sheet is only the user database. The app contains all business logic, calculations, validations and user flows.
 
-The official Sheet/template for the app is `plantilla_base_finanzas_app.xlsx`. The user's personal `Finanzas.xlsx` is only a reference example and must not be used as the technical source of truth.
+The official data source is the app Google Sheet template / connected Google Sheet. The Sheet is the database; the app owns the business logic.
 
 ## 2. Core architecture
 
@@ -129,6 +129,62 @@ Confirmed rule:
 - The app must avoid duplicates per month.
 - Until confirmed, they are obligations/pending commitments.
 - Once confirmed, they become real movements.
+
+#### 5.2.1 Monthly confirmation flow
+
+The app has a dedicated review and confirmation screen at `/fixed-expenses/confirm`. It is reachable from the `/fixed-expenses` page and from `/more`.
+
+The flow per month is:
+
+1. The user opens the screen and selects the month to review.
+2. The app lists every active `Gastos_fijos` row whose `frecuencia` and date range (`fechaInicio` / `fechaFin`) correspond to the selected month.
+3. Each proposal shows the template amount, category, account and proposed charge date (default = template `diaCargo`, clamped to 1-28).
+4. The user can adjust the amount, account, category, date and notes inline.
+5. The user taps "Confirmar" for one expense, or "Confirmar todos los pendientes" for a bulk action.
+6. On confirm, the app:
+   - creates or updates one `Movimientos` row with `id = TX-FIJO-YYYY-MM-fijoId`, `tipo = Gasto`, `mesClave = YYYY-MM`, `cuentaOrigen`, `importe`, `categoria`, `notas` (prefixed with "Gasto fijo confirmado: ...", includes the `fijoId` for traceability);
+   - persists the `fijoId` in the Sheet's `Config` sheet under the key `fixed.confirmed.YYYY-MM` (value = comma-separated list of confirmed `fijoId`s);
+7. The user can unconfirm an expense from the same screen: the app soft-deletes the `Movimientos` row and removes the `fijoId` from the `Config` key.
+8. The transaction movement of the salary and the fixed expense share the same duplicate-prevention pattern (deterministic ID). A row in `Config` is the fast cache; the actual `Movimientos` row is the durable proof.
+
+#### 5.2.2 Deterministic ID convention
+
+```
+id = "TX-FIJO-" + monthKey + "-" + fijoId
+example = "TX-FIJO-2026-06-FIX-1700000000"
+```
+
+The same `fijoId` cannot produce two movements for the same month because `findRowIndexByColumnValue("id", ...)` is used to dedup. The month part of the ID is the `YYYY-MM` key selected at confirmation time. The `fijoId` suffix prevents collisions across different fixed expenses in the same month.
+
+#### 5.2.3 Config persistence
+
+- Key: `fixed.confirmed.YYYY-MM`
+- Value: comma-separated list of `fijoId` values, no spaces (e.g. `FIX-1700000000,FIX-1700000001`).
+- Read by: `readConfirmedFixedExpenseIds({ sheetId, monthKey })` in `src/lib/finance/fixed-expense-confirmation.ts`.
+- Written by: `addFixedExpenseConfirmation` / `removeFixedExpenseConfirmation` / `confirmFixedExpenseForMonth` / `unconfirmFixedExpenseForMonth`.
+- Used by: `useFinanceSummary` to compute `confirmedFixedExpenseIds`, which is then passed to the engine via `FinanceContext.confirmedFixedExpenseIds`.
+
+#### 5.2.4 Frequencies
+
+The screen filters fixed expenses by `frecuencia` to decide whether the row belongs to the selected month:
+
+- `Mensual`: always included (if active and within date range).
+- `Unico`: included only if the month of `fechaInicio` matches the selected month.
+- `Trimestral`: included every 3 months starting from `fechaInicio` (month 0, 3, 6, ...).
+- `Anual`: included only if the month of `fechaInicio` matches the selected month.
+
+If a row's `fechaInicio` / `fechaFin` exclude the selected month, it is filtered out before the frequency check.
+
+#### 5.2.5 Engine integration
+
+The engine receives `confirmedFixedExpenseIds` in `FinanceContext`. Internally:
+
+- `isConfirmedFixedMovement(t)` matches by `id.startsWith("TX-FIJO-")`. A row is treated as confirmed if its ID matches the prefix, regardless of whether it is in the current `Config` key. This protects against stale `Config` data.
+- `getFixedExpensesConfirmed(ctx)` returns the sum of the `importe` of confirmed movements in the month.
+- `getFixedExpensesPending(ctx)` returns the sum of `importe` of active fixed expenses for the month that are not yet confirmed.
+- `getVariableExpenses(ctx)` excludes any movement whose `id` starts with `TX-FIJO-` to prevent double counting (confirmed fixed expenses are never in the variable pool).
+
+If the user edits a fixed expense template AFTER confirming the current month, the already-confirmed movement is NOT modified automatically. Future months will use the new template; the current month's movement remains as the historical truth. To change the current month's movement, the user unconfirms and re-confirms in `/fixed-expenses/confirm`.
 
 ### 5.3 Future payments
 
@@ -530,16 +586,23 @@ This section documents what already exists in the codebase, what is incomplete o
 
 ### 16.4 Fixed expenses
 
-- **Current files**: `src/features/fixed-expenses/hooks/use-fixed-expenses.ts`, `src/features/fixed-expenses/components/fixed-expense-form.tsx`, `src/app/savings/page.tsx` (the "Fijos" tab), `src/components/dashboard/savings-panel-expanded.tsx`.
+- **Current files**: `src/features/fixed-expenses/hooks/use-fixed-expenses.ts`, `src/features/fixed-expenses/components/fixed-expense-form.tsx`, `src/features/fixed-expenses/hooks/use-fixed-confirmation.ts`, `src/lib/finance/fixed-expense-confirmation.ts`, `src/app/fixed-expenses/page.tsx`, `src/app/fixed-expenses/confirm/page.tsx`, `src/hooks/use-finance-summary.ts`.
 - **What currently works**:
   - CRUD on `Gastos_fijos` sheet.
   - Computed monthly equivalent using `Mensual / Trimestral / Anual` in `savings-panel-expanded.tsx:92-98` and `page.tsx:239-246`.
+  - Dedicated monthly confirmation screen at `/fixed-expenses/confirm` reachable from `/fixed-expenses` and `/more`.
+  - `useConfirmedFixedExpenseIds(sheetId, monthKey)` reads `Config.fixed.confirmed.YYYY-MM` and returns a `Set<string>` of confirmed `fijoId`s.
+  - `useConfirmFixedExpense` / `useUnconfirmFixedExpense` write the deterministic `TX-FIJO-YYYY-MM-fijoId` movement to `Movimientos` and update the `Config` key.
+  - `useFinanceSummary` consumes the confirmed set and passes it to the engine, so dashboard `Disponible` and the breakdown correctly split confirmed fixed expenses from pending obligations.
+  - Per-month frequency filtering (Mensual, Trimestral, Anual, Unico) and date-range filtering (`fechaInicio` / `fechaFin`).
+  - Inline edit of amount, account, category, date and notes before confirming.
+  - Bulk "Confirmar todos los pendientes" action.
+  - Per-item unconfirm (soft-deletes the movement and removes the `fijoId` from the `Config` key).
 - **What is incomplete or wrong**:
-  - There is no confirmation flow. Rule 5.2 requires: app proposes → user reviews → user confirms → real movements created. The current code only stores the fixed expense definition; it never creates the monthly expense movement.
-  - No `Movimientos_fijos_confirmados` / monthly confirmation state. The model does not track which month has been confirmed.
-  - There is no "pending confirmation" list separate from "confirmed" list.
-- **Verdict**: extend the existing module. Add a confirmation screen and a per-month confirmation ledger.
-- **Fix in**: Phase 6.
+  - The `Config` value for `fixed.confirmed.YYYY-MM` is not currently invalidated / pruned for past months. Stale months will accumulate. Acceptable for now because the read only runs for the month being reviewed.
+  - "Desconfirmar" uses a `window.confirm` modal, not a styled in-app dialog. To be polished in Phase 11.
+- **Verdict**: rule 5.2 is implemented end to end.
+- **Fix in**: Phase 6 (done). Polish in Phase 11.
 
 ### 16.5 Future payments
 
@@ -760,6 +823,8 @@ This section defines the next phases clearly. Each phase must end with `npx tsc 
   - User taps "Confirmar mes". For each confirmed fixed expense, the app creates a real `Gasto` movement in `Movimientos` with `id = TX-FIJO-YYYY-MM-fijoId` and marks the fixed expense as confirmed for the month.
   - Duplicates are impossible because the id is deterministic.
 - Installments (`Pagos_aplazados`) follow the same pattern: each active installment creates a `TX-DEFER-YYYY-MM-aplazadoId` movement when confirmed for the month.
+
+**Status (Phase 6)**: implemented. See section 5.2 for the official logic, ID convention, and `Config` persistence. The review screen lives at `/fixed-expenses/confirm`. The engine receives the confirmed set via `useFinanceSummary` so dashboard metrics respect the confirmation state.
 
 ### Phase 7 — Savings and `Mov_reservas`
 

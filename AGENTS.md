@@ -103,13 +103,32 @@ Before modifying any of the following areas, read `docs/FINANCE_LOGIC.md`:
 - Google Sheet schema, readers, writers or validation;
 - account balance or account role logic.
 
-Do not read or rewrite `docs/FINANCE_LOGIC.md` for purely visual changes such as spacing, colors, minor layout tweaks or copy-only changes.
+`docs/FINANCE_LOGIC.md` is the compact source of truth. Use the other files only
+when you actually need them:
+
+- `docs/FINANCE_AUDIT.md` — historical findings and "why was this changed" context.
+  Read only when auditing old code or checking that a past finding is resolved.
+- `docs/FINANCE_IMPLEMENTATION.md` — phase tracker, main files per phase,
+  conventions, IDs and Config keys. Read only when checking phase status or
+  implementation history.
+- `docs/FINANCE_LOGIC.backup.md` — full snapshot of `FINANCE_LOGIC.md` from the
+  last time the official logic was rewritten.
+
+Do not read `FINANCE_AUDIT.md` or `FINANCE_IMPLEMENTATION.md` for purely visual
+changes such as spacing, colors, minor layout tweaks or copy-only changes. Do
+not read any finance doc when the change is purely visual.
 
 When changing the official finance logic:
 
-1. Copy the current content of `docs/FINANCE_LOGIC.md` into `docs/FINANCE_LOGIC.backup.md`.
-2. Update `docs/FINANCE_LOGIC.md` with the new official logic.
-3. Keep the document concise, practical and aligned with the current implementation.
+1. Copy the current content of `docs/FINANCE_LOGIC.md` into
+   `docs/FINANCE_LOGIC.backup.md`.
+2. Update `docs/FINANCE_LOGIC.md` with the new official logic. Keep it concise.
+3. If the change resolves a known audit finding, update the status marker in
+   `docs/FINANCE_AUDIT.md`.
+4. If the change is part of a phase, update the phase status in
+   `docs/FINANCE_IMPLEMENTATION.md`.
 
-The Google Sheet is the database. The app contains all business logic.
+The official data source is the app Google Sheet template / connected Google
+Sheet. The Sheet is the database; the app owns the business logic. Do not
+reference any personal spreadsheet or user file in project docs.
 
