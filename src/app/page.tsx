@@ -29,10 +29,6 @@ import {
 } from "@/components/ui/dialog";
 import { TransactionForm } from "@/features/transactions/components/transaction-form";
 import { DashboardCustomizer } from "@/components/dashboard/dashboard-customizer";
-import {
-  useWidgetReorder,
-  ReorderOverlay,
-} from "@/components/dashboard/widget-reorder";
 import { ChartRenderer } from "@/components/dashboard/chart-renderer";
 import { DisponibleExplanationModal } from "@/components/dashboard/disponible-explanation-modal";
 import { GeneralSavingsBreakdownModal } from "@/components/dashboard/general-savings-breakdown-modal";
@@ -50,7 +46,8 @@ import { useFuturePayments } from "@/features/future-payments/hooks/use-future-p
 import { useReserves } from "@/features/reserves/hooks/use-reserves";
 import { useGoals } from "@/features/goals/hooks/use-goals";
 import { useTransactions } from "@/features/transactions/hooks/use-transactions";
-import { calculateExpensesByCategory } from "@/lib/finance/calculations";
+import { useDeferredPayments } from "@/features/deferred-payments/hooks/use-deferred-payments";
+import { getChartData } from "@/lib/finance/chart-data";
 import { generateMonthKey } from "@/lib/sheets/adapters";
 import { hasToken } from "@/lib/sheets/client";
 import { LoadingState } from "@/components/states/loading-state";
@@ -174,19 +171,6 @@ export default function VistaMesPage() {
   const widgets = dashboardConfig.widgets;
   const isVisible = (id: string) => widgets.find((w) => w.id === id)?.visible ?? true;
 
-  const { reorderWidgets } = useAppStore();
-  const {
-    isReorderMode,
-    enterReorderMode,
-    exitReorderMode,
-    confirmReorder,
-    selectForReorder,
-    pickedIndex,
-    activeIndex,
-  } = useWidgetReorder(widgets, (from, to) => {
-    reorderWidgets(from, to);
-  });
-
   const { summary, isLoading, isError } = useFinanceSummary({ monthKey: selectedMonth });
   const {
     data: transactions,
@@ -196,6 +180,7 @@ export default function VistaMesPage() {
   const { data: accounts } = useAccounts(dataReady ? sheetId : null);
   const { data: fixedExpenses } = useFixedExpenses(dataReady ? sheetId : null);
   const { data: futurePayments } = useFuturePayments(dataReady ? sheetId : null);
+  const { data: deferredPayments } = useDeferredPayments(dataReady ? sheetId : null);
   const { data: reserves } = useReserves(dataReady ? sheetId : null);
   const { data: goals } = useGoals(dataReady ? sheetId : null);
   const { data: salaryConfig } = useSalaryConfig(dataReady ? sheetId : null);
@@ -268,15 +253,25 @@ export default function VistaMesPage() {
     [variableExpenses, fixedExpensesTotal, deferredPaymentsTotal, futureProvisions],
   );
 
-  const expensesByCategory = useMemo(() => {
-    const filtered = (transactions ?? []).filter((t) => t.tipo === "Gasto");
-    const byCategory = calculateExpensesByCategory(filtered, categories ?? []);
-    return byCategory.map((item, i) => ({
-      name: item.categoryName || item.category,
-      value: item.total,
-      color: CHART_COLORS[i % CHART_COLORS.length],
-    }));
-  }, [transactions, categories]);
+  const chart = dashboardConfig.charts?.[0];
+
+  const chartData = useMemo(() => {
+    if (!chart) return [];
+    return getChartData(chart.dataSource, {
+      transactions: transactions ?? [],
+      categories: categories ?? [],
+      fixedExpenses: fixedExpenses ?? [],
+      futurePayments: futurePayments ?? [],
+      deferredPayments: deferredPayments ?? [],
+    });
+  }, [
+    chart,
+    transactions,
+    categories,
+    fixedExpenses,
+    futurePayments,
+    deferredPayments,
+  ]);
 
   const breakdown = summary?.savingsBreakdown ?? { reserves: [], goals: [], futurePayments: [] };
 
@@ -399,24 +394,27 @@ export default function VistaMesPage() {
     );
   }
 
-  const chart = dashboardConfig.charts?.[0];
   const hasChart = isVisible("chart") && chart;
 
   return (
     <div className="px-4 py-6 space-y-6 pb-32">
-      <div className="space-y-1">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm text-muted-foreground">{year}</p>
-            <h1 className="text-4xl font-bold tracking-tight text-foreground">
+      <div className="space-y-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="space-y-0.5 min-w-0">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+              {year}
+            </p>
+            <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-foreground">
               {monthName}
             </h1>
+            <p className="text-sm text-muted-foreground">Vista del mes</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <Button
               variant="ghost"
               size="icon"
               className="rounded-xl"
+              aria-label="Personalizar dashboard"
               onClick={() => setShowCustomizer(true)}
             >
               <Settings className="h-5 w-5" />
@@ -426,10 +424,10 @@ export default function VistaMesPage() {
               value={selectedMonth}
               onChange={(e) => setSelectedMonth(e.target.value)}
               className="rounded-xl border border-input bg-card px-3 py-2 text-sm shadow-sm transition-colors hover:border-primary/50 focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/20"
+              aria-label="Selector de mes"
             />
           </div>
         </div>
-        <p className="text-sm text-muted-foreground">Vista del mes</p>
       </div>
 
       <div className="space-y-3">
@@ -519,12 +517,17 @@ export default function VistaMesPage() {
           style={{ animationDelay: "300ms", borderColor: chart.accentColor + "30" }}
         >
           <CardContent className="p-4">
-            <h2 className="text-sm font-semibold mb-4 flex items-center gap-2">
-              <Receipt className="h-4 w-4 text-muted-foreground" />
-              {chart.name}
-            </h2>
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <h2 className="text-sm font-semibold flex items-center gap-2">
+                <Receipt className="h-4 w-4 text-muted-foreground" />
+                {chart.name}
+              </h2>
+              <span className="text-xs text-muted-foreground capitalize">
+                {chart.dataSource}
+              </span>
+            </div>
             <div className="h-64">
-              <ChartRenderer chart={chart} data={expensesByCategory} />
+              <ChartRenderer chart={chart} data={chartData} />
             </div>
           </CardContent>
         </Card>
@@ -611,14 +614,6 @@ export default function VistaMesPage() {
             </div>
           </CardContent>
         </Card>
-      )}
-
-      {isReorderMode && (
-        <ReorderOverlay
-          isActive={isReorderMode}
-          onConfirm={confirmReorder}
-          onCancel={exitReorderMode}
-        />
       )}
 
       <div className="fixed bottom-24 right-4 z-40">

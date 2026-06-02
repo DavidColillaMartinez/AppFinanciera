@@ -87,7 +87,6 @@ The official current rules live in `docs/FINANCE_LOGIC.md`. The phase history li
   - `useFinanceSummary` passes `confirmedFixedExpenseIds` to the engine, so dashboard `Disponible` correctly splits confirmed from pending.
   - Bulk confirm and per-item unconfirm both work.
 - **Known follow-up (cosmetic)**:
-  - "Desconfirmar" still uses `window.confirm`. Will be replaced by a styled dialog in Phase 11.
   - Stale `Config` keys for past months are not pruned. Acceptable because reads only run for the selected month.
 - **See**: `FINANCE_LOGIC.md` section 5.2.
 
@@ -206,20 +205,21 @@ The official current rules live in `docs/FINANCE_LOGIC.md`. The phase history li
   - Type-specific required fields are still Phase 9 work.
 - **Next step**: Phase 9.
 
-## A14. Zustand persisted dashboard configuration — `partially resolved`
+## A14. Zustand persisted dashboard configuration — `resolved`
 
-- **Source**: `src/stores/app-store.ts`, `src/components/dashboard/dashboard-customizer.tsx`, `src/app/page.tsx`.
+- **Source**: `src/stores/app-store.ts`, `src/components/dashboard/dashboard-customizer.tsx`, `src/app/page.tsx`, `src/lib/finance/chart-data.ts`.
 - **Original finding**:
   - Persist had no `version` field; the old `chartType` schema broke for returning users.
   - `onRehydrateStorage` patched the missing `charts` array but ran async — first render could read `undefined`.
   - `useWidgetReorder` was destructured in `page.tsx` but its handlers were never wired.
   - The dashboard only rendered `dashboardConfig.charts[0]` even though the customizer allowed multiple.
+  - The dashboard hardcoded `expensesByCategory` regardless of the chart's `dataSource`, so the customizer's 8 data sources were advertised but not rendered.
 - **Current state**:
-  - `version: 2` was added to the persist config.
-  - `page.tsx` uses `(dashboardConfig.charts ?? [])` fallbacks.
-  - `useWidgetReorder` is still dead code (handlers never wired).
-  - The single-chart display is the engine contract for now; multi-chart layout is deferred to Phase 11.
-- **Next step**: Phase 11 — wire the reorder hook or remove it, polish the customizer.
+  - `version` was added to the persist config; `page.tsx` uses `(dashboardConfig.charts ?? [])` fallbacks.
+  - `useWidgetReorder` was dead code; the hook and `ReorderOverlay` were removed in Phase 11. The customizer uses up/down arrows as the working reorder path.
+  - Dashboard now uses `getChartData(chart.dataSource, ...)` with all 8 sources (`categories`, `expenses`, `savings`, `income`, `total`, `fixed`, `deferred`, `future`); `deferredPayments` is fetched from `useDeferredPayments`.
+  - The single-chart display remains the engine contract for now. Multi-chart layout is still deferred.
+- **See**: `FINANCE_LOGIC.md` sections 9 and 11.1.
 
 ## A15. `src/lib/finance/` inventory — `obsolete`
 
@@ -246,8 +246,8 @@ obsolete because the engine has been built and the module layout is stable:
 | 6 | `Mov_reservas` not used as savings ledger | Generic `Ahorro` movements | Phase 7 (pending) |
 | 7 | `Reservas.saldoActual` manual | Not derived from `Mov_reservas` | Phase 7 (pending) |
 | 8 | "Disponible" global, not per account role | No `rol` filter on dashboard | Phase 8 (pending) |
-| 9 | Zustand persist schema change has no `migrate` | `version: 2` added, `merge` reverted (broke generics) | Phase 11 (pending polish) |
-| 10 | `useWidgetReorder` is dead code | Handlers not wired | Phase 11 (pending) |
+| 9 | Zustand persist schema change has no `migrate` | `version: 2` added, `merge` reverted (broke generics) | Phase 11 (resolved) |
+| 10 | `useWidgetReorder` is dead code | Hook removed, customizer uses up/down arrows | Phase 11 (resolved) |
 | 11 | `mesClave` / `tipoDestino` missing on `Mov_reservas` | Headers added | Phase 3 |
 | 12 | `rol` missing on `Cuentas` | Column added | Phase 3 |
 | 13 | `/transactions` query param filter not implemented | Filter at hook level | Phase 9 (pending) |

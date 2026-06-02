@@ -379,22 +379,24 @@ live in `docs/FINANCE_AUDIT.md`.
   - Optional: Sheets API quota throttling on 429.
 - **See**: `FINANCE_AUDIT.md` A11, A12.
 
-## Phase 11 — UI / design polish — `pending`
+## Phase 11 — UI / design polish — `implemented`
 
 - **Purpose**: improve the visual layer once the underlying logic is stable.
-- **Pending goals**:
-  - Improve the dashboard header.
-  - Improve forms (consistent spacing, sticky footer).
-  - Improve charts (use `getChartData` for the active data source; respect `accentColor`, `animations`, `showLabels`).
-  - Improve widget customization (multi-chart layout deferred — single-chart display is the engine contract for now).
-  - Wire the long-press widget reorder hook (`useWidgetReorder`) or remove the dead code.
-  - Polish the "Desconfirmar" dialog in `/fixed-expenses/confirm`.
+- **Resolved goals**:
+  - Dashboard header: hierarchy improved (year eyebrow, larger month, subtitle, customizer + month picker aligned). Sticky bottom FAB preserved.
+  - Charts: dashboard now calls `getChartData(chart.dataSource, ...)` for all 8 data sources. `deferredPayments` is fetched via `useDeferredPayments`. `accentColor`, `animations`, `showLabels` are respected. Source label shown next to chart name.
+  - Widget customization: working (Switch + up/down arrows in customizer). Multi-chart layout is still the engine contract — single chart is rendered.
+  - Dead code removal: `useWidgetReorder` and `ReorderOverlay` were unused; both removed.
+  - Confirmation dialogs: `window.confirm` replaced by a new reusable `ConfirmDialog` (`src/components/ui/confirm-dialog.tsx`) in chart delete and fixed-expense unconfirm.
+  - Forms polish: `category-form.tsx` and `reserve-form.tsx` updated to consistent `h-11` inputs and sticky bottom action bar matching `transaction-form.tsx`. Duplicate error block in `category-form.tsx` removed.
 - **Likely files**:
   - `src/app/page.tsx`
-  - `src/components/dashboard/*`
-  - `src/components/forms/*`
-  - `src/hooks/use-drag-reorder.ts`, `src/hooks/use-long-press.ts`
-- **See**: `FINANCE_AUDIT.md` A14.
+  - `src/components/dashboard/chart-renderer.tsx`, `dashboard-customizer.tsx`
+  - `src/components/ui/confirm-dialog.tsx` (new)
+  - `src/features/categories/components/category-form.tsx`
+  - `src/features/reserves/components/reserve-form.tsx`
+  - `src/app/fixed-expenses/confirm/page.tsx`
+- **See**: `FINANCE_AUDIT.md` A11, A14.
 
 ---
 
@@ -411,4 +413,4 @@ live in `docs/FINANCE_AUDIT.md`.
 | 8.5 | Critical post-dashboard fixes | implemented |
 | 9 | Forms and movement flows | implemented |
 | 10 | Google session and Sheet connection recovery | implemented |
-| 11 | UI / design polish | pending |
+| 11 | UI / design polish | implemented |

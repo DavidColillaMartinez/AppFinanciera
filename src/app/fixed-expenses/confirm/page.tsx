@@ -21,6 +21,7 @@ import {
 import { buildProposal, buildFixedExpenseMovementId } from "@/lib/finance/fixed-expense-confirmation";
 import { generateMonthKey } from "@/lib/sheets/adapters";
 import { useToast } from "@/components/ui/toast";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { EmptyState } from "@/components/states/empty-state";
 import { LoadingState } from "@/components/states/loading-state";
 import { ErrorState } from "@/components/states/error-state";
@@ -121,6 +122,7 @@ export default function ConfirmFixedExpensesPage() {
   const confirmAll = useConfirmAllPendingFixedExpenses(sheetId);
 
   const [drafts, setDrafts] = useState<Record<string, DraftState>>({});
+  const [pendingUnconfirm, setPendingUnconfirm] = useState<ReturnType<typeof buildProposal> | null>(null);
 
   const proposals = useMemo(() => {
     if (!fijos) return [];
@@ -212,10 +214,13 @@ export default function ConfirmFixedExpensesPage() {
     }
   }
 
-  async function handleUnconfirm(proposal: ReturnType<typeof buildProposal>) {
-    if (!confirm(`¿Desconfirmar el gasto fijo "${proposal.fijo.concepto}" de ${selectedMonth}? Se eliminara el movimiento del mes.`)) {
-      return;
-    }
+  function requestUnconfirm(proposal: ReturnType<typeof buildProposal>) {
+    setPendingUnconfirm(proposal);
+  }
+
+  async function confirmUnconfirm() {
+    if (!pendingUnconfirm) return;
+    const proposal = pendingUnconfirm;
     try {
       await unconfirmOne.mutateAsync({
         monthKey: selectedMonth,
@@ -224,6 +229,8 @@ export default function ConfirmFixedExpensesPage() {
       success(`Gasto fijo "${proposal.fijo.concepto}" desconfirmado.`);
     } catch (e) {
       showError(`Error al desconfirmar: ${(e as Error).message}`);
+    } finally {
+      setPendingUnconfirm(null);
     }
   }
 
@@ -372,7 +379,7 @@ export default function ConfirmFixedExpensesPage() {
             <ConfirmedRow
               key={proposal.fijo.fijoId}
               proposal={proposal}
-              onUnconfirm={() => handleUnconfirm(proposal)}
+              onUnconfirm={() => requestUnconfirm(proposal)}
               unconfirming={unconfirmOne.isPending}
             />
           ))}
@@ -403,6 +410,21 @@ export default function ConfirmFixedExpensesPage() {
           </CardContent>
         </Card>
       )}
+
+      <ConfirmDialog
+        open={pendingUnconfirm !== null}
+        onOpenChange={(open) => !open && setPendingUnconfirm(null)}
+        title="Desconfirmar gasto fijo"
+        description={
+          pendingUnconfirm
+            ? `¿Desconfirmar el gasto fijo "${pendingUnconfirm.fijo.concepto}" de ${selectedMonth}? Se eliminara el movimiento del mes.`
+            : ""
+        }
+        confirmLabel="Desconfirmar"
+        cancelLabel="Cancelar"
+        destructive
+        onConfirm={confirmUnconfirm}
+      />
     </div>
   );
 }

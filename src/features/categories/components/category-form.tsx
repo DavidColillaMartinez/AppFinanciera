@@ -114,11 +114,6 @@ export function CategoryForm({
         </CardTitle>
       </CardHeader>
       <CardContent>
-        {submitError && (
-          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-            {submitError}
-          </div>
-        )}
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           {(submitError || localError) && (
             <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
@@ -130,6 +125,7 @@ export function CategoryForm({
             <Input
               id="nombre"
               placeholder="Nombre de la categoria"
+              className="h-11"
               {...register("nombre")}
             />
             {errors.nombre && (
@@ -149,6 +145,7 @@ export function CategoryForm({
                 onChange={(e) =>
                   setValue("tipoHabitual", e.target.value as CategoryType)
                 }
+                className="h-11"
               />
               {errors.tipoHabitual && (
                 <p className="text-xs text-destructive">
@@ -165,6 +162,7 @@ export function CategoryForm({
                 step="0.01"
                 min="0"
                 placeholder="0.00"
+                className="h-11"
                 {...register("presupuestoMensual", { valueAsNumber: true })}
               />
               {errors.presupuestoMensual && (
@@ -178,7 +176,12 @@ export function CategoryForm({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label htmlFor="grupo">Grupo</Label>
-              <Input id="grupo" placeholder="Opcional" {...register("grupo")} />
+              <Input
+                id="grupo"
+                placeholder="Opcional"
+                className="h-11"
+                {...register("grupo")}
+              />
             </div>
 
             <div className="space-y-2">
@@ -186,7 +189,7 @@ export function CategoryForm({
               <Input
                 type="color"
                 id="color"
-                className="h-10"
+                className="h-11"
                 {...register("color")}
               />
               {errors.color && (
@@ -199,16 +202,26 @@ export function CategoryForm({
 
           <div className="space-y-2">
             <Label htmlFor="icono">Icono</Label>
-            <Input id="icono" placeholder="Opcional" {...register("icono")} />
+            <Input
+              id="icono"
+              placeholder="Opcional"
+              className="h-11"
+              {...register("icono")}
+            />
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="notas">Notas</Label>
-            <Input id="notas" placeholder="Opcional" {...register("notas")} />
+            <Input
+              id="notas"
+              placeholder="Opcional"
+              className="h-11"
+              {...register("notas")}
+            />
           </div>
 
-          <div className="flex gap-3 pt-2">
-            <Button type="submit" className="flex-1" disabled={isSubmitting}>
+          <div className="flex gap-3 pt-2 sticky bottom-0 bg-background border-t pt-4 -mx-4 px-4">
+            <Button type="submit" className="flex-1 h-11" disabled={isSubmitting}>
               {isSubmitting
                 ? "Guardando..."
                 : isEditing
@@ -216,7 +229,7 @@ export function CategoryForm({
                   : "Guardar"}
             </Button>
             {onCancel && (
-              <Button type="button" variant="outline" onClick={onCancel}>
+              <Button type="button" variant="outline" onClick={onCancel} className="h-11">
                 Cancelar
               </Button>
             )}

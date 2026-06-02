@@ -130,6 +130,7 @@ export function ReserveForm({
             <Input
               id="nombre"
               placeholder="Nombre de la reserva"
+              className="h-11"
               {...register("nombre")}
             />
             {errors.nombre && (
@@ -147,6 +148,7 @@ export function ReserveForm({
                 onChange={(e) =>
                   setValue("tipo", e.target.value as ReserveCreateInput["tipo"])
                 }
+                className="h-11"
               />
             </div>
             <div className="space-y-2">
@@ -158,6 +160,7 @@ export function ReserveForm({
                 onChange={(e) =>
                   setValue("prioridad", e.target.value as ReserveCreateInput["prioridad"])
                 }
+                className="h-11"
               />
             </div>
           </div>
@@ -171,6 +174,7 @@ export function ReserveForm({
                 step="0.01"
                 min="0"
                 placeholder="0.00"
+                className="h-11"
                 {...register("importeObjetivo", { valueAsNumber: true })}
               />
               {errors.importeObjetivo && (
@@ -187,6 +191,7 @@ export function ReserveForm({
                 step="0.01"
                 min="0"
                 placeholder="0.00"
+                className="h-11"
                 {...register("saldoActual", { valueAsNumber: true })}
               />
             </div>
@@ -201,6 +206,7 @@ export function ReserveForm({
                 step="0.01"
                 min="0"
                 placeholder="0.00"
+                className="h-11"
                 {...register("aporteMensualSugerido", { valueAsNumber: true })}
               />
             </div>
@@ -209,6 +215,7 @@ export function ReserveForm({
               <Input
                 id="cuentaFisica"
                 placeholder="Opcional"
+                className="h-11"
                 {...register("cuentaFisica")}
               />
             </div>
@@ -219,12 +226,13 @@ export function ReserveForm({
             <Input
               id="notas"
               placeholder="Opcional"
+              className="h-11"
               {...register("notas")}
             />
           </div>
 
-          <div className="flex gap-3 pt-2">
-            <Button type="submit" className="flex-1" disabled={isSubmitting}>
+          <div className="flex gap-3 pt-2 sticky bottom-0 bg-background border-t pt-4 -mx-4 px-4">
+            <Button type="submit" className="flex-1 h-11" disabled={isSubmitting}>
               {isSubmitting
                 ? "Guardando..."
                 : isEditing
@@ -232,7 +240,7 @@ export function ReserveForm({
                   : "Guardar"}
             </Button>
             {onCancel && (
-              <Button type="button" variant="outline" onClick={onCancel}>
+              <Button type="button" variant="outline" onClick={onCancel} className="h-11">
                 Cancelar
               </Button>
             )}

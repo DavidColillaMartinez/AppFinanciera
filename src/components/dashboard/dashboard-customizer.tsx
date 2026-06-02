@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { cn } from "@/lib/utils";
 import {
   Settings,
@@ -116,6 +117,8 @@ export function DashboardCustomizer({
     showLabels: false,
   });
 
+  const [chartToDelete, setChartToDelete] = useState<DashboardChart | null>(null);
+
   function resetEditor() {
     setEditor({
       step: "list",
@@ -155,9 +158,14 @@ export function DashboardCustomizer({
     });
   }
 
-  function handleDeleteChart(chartId: string) {
-    if (confirm("Eliminar este grafico?")) {
-      removeChart(chartId);
+  function handleDeleteChart(chart: DashboardChart) {
+    setChartToDelete(chart);
+  }
+
+  function confirmDeleteChart() {
+    if (chartToDelete) {
+      removeChart(chartToDelete.id);
+      setChartToDelete(null);
     }
   }
 
@@ -484,14 +492,14 @@ export function DashboardCustomizer({
                     >
                       <Pencil className="h-3.5 w-3.5" />
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-destructive"
-                      onClick={() => handleDeleteChart(chart.id)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-destructive"
+                    onClick={() => handleDeleteChart(chart)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
                   </div>
                 </div>
               ))}
@@ -529,6 +537,17 @@ export function DashboardCustomizer({
           </Button>
         </div>
       </DialogContent>
+
+      <ConfirmDialog
+        open={chartToDelete !== null}
+        onOpenChange={(open) => !open && setChartToDelete(null)}
+        title="Eliminar grafico"
+        description={`Vas a eliminar "${chartToDelete?.name ?? ""}". Esta accion no se puede deshacer.`}
+        confirmLabel="Eliminar"
+        cancelLabel="Cancelar"
+        destructive
+        onConfirm={confirmDeleteChart}
+      />
     </Dialog>
   );
 }
