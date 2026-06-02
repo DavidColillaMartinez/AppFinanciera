@@ -10,6 +10,7 @@ import type {
   ReserveMovementRow,
 } from "@/types/models";
 import { TipoDestinoReserva, TipoMovimientoReserva, TransactionType } from "@/constants/enums";
+import { SALARY_MOVEMENT_ID_PREFIX } from "./salary-config";
 
 export type MonthKey = string;
 
@@ -122,7 +123,7 @@ export interface DashboardFinanceSummary {
   executedSavings: number;
 }
 
-const SALARY_ID_PREFIXES = ["TX-SALARY-", "SALARY-"] as const;
+const SALARY_ID_PREFIXES = [SALARY_MOVEMENT_ID_PREFIX, "SALARY-"] as const;
 const FIXED_CONFIRMED_ID_PREFIX = "TX-FIJO-";
 const DEFERRED_CONFIRMED_ID_PREFIX = "TX-DEFER-";
 

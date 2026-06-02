@@ -132,6 +132,8 @@ export const SHEET_LEGACY = {
   APPS_SCRIPT: "AppsScript",
 } as const;
 
+export const CONFIG_HEADERS = ["Clave", "Valor", "Descripcion"] as const;
+
 export const CONFIG_KEYS = {
   TEMPLATE_VERSION: "templateVersion",
   APP_MIN_VERSION: "appMinVersion",
@@ -140,6 +142,16 @@ export const CONFIG_KEYS = {
   MONTH: "month",
   FIRST_DAY_OF_WEEK: "firstDayOfWeek",
   LOCALE: "locale",
+} as const;
+
+export const SALARY_CONFIG_KEYS = {
+  ENABLED: "salary.enabled",
+  TYPE: "salary.type",
+  FIXED_AMOUNT: "salary.fixedAmount",
+  DAY: "salary.day",
+  DESTINATION_ACCOUNT: "salary.destinationAccount",
+  DESCRIPTION: "salary.description",
+  UPDATED_AT: "salary.updatedAt",
 } as const;
 
 export const FIRST_DATA_ROW = 2;

@@ -44,14 +44,27 @@ Income includes:
 
 Salary must be stored in the Google Sheet, not only in Zustand/localStorage.
 
-Salary configuration must include:
+Salary configuration is stored in the `Config` sheet as key/value rows.
 
-- salary type: fixed or variable;
-- amount, when fixed;
-- month-specific amount, when variable;
-- destination account;
-- active status;
-- createdAt and updatedAt when possible.
+Config keys (canonical names):
+
+- `salary.enabled` — `true` | `false`.
+- `salary.type` — `fixed` | `variable`.
+- `salary.fixedAmount` — number, used when type is `fixed`.
+- `salary.day` — day of month, integer 1–28. Default 1.
+- `salary.destinationAccount` — `cuentaId` of the account that receives the salary.
+- `salary.description` — concept of the income movement. Default `Nomina mensual`.
+- `salary.updatedAt` — ISO timestamp of the last config save.
+
+Reading and writing is centralized in `src/lib/finance/salary-config.ts` (`parseSalaryConfig`, `serializeSalaryConfig`) and `src/lib/finance/salary.ts` (`readSalaryConfigFromSheet`, `writeSalaryConfigToSheet`). Writer is `writeConfigValues` in `src/lib/sheets/writer.ts`: it reads the Config sheet once, updates existing rows by `Clave`, and appends new rows when the key is missing.
+
+Validation lives in `validateSalaryConfig(config, accounts)`. A config is invalid if:
+
+- it is enabled and type is `fixed` with `fixedAmount <= 0`;
+- it is enabled with `day < 1` or `day > 28`;
+- it is enabled and `destinationAccount` is set but the account does not exist or is inactive.
+
+The Zustand store keeps a local cache of the config (`monthlyIncome`, `incomeType`) for fast UI access and offline initial state, but the canonical source is the Sheet.
 
 ### 4.2 Fixed salary
 
@@ -61,9 +74,16 @@ Rules:
 
 - Do not depend only on day 1.
 - If the user opens the app on any day of the month and the fixed salary movement for that month does not exist, create it.
-- Avoid duplicates using deterministic IDs such as `SALARY-YYYY-MM` or `TX-SALARY-YYYY-MM`.
-- The salary movement must use the configured destination account.
+- The salary movement must use a deterministic ID: `TX-SALARY-YYYY-MM`.
+- The salary movement uses the configured `destinationAccount` (cuentaDestino).
+- The salary movement uses the configured `day` for the `fecha` field. If `day` is missing or invalid, fall back to day 1.
 - It must count as income for the selected month.
+- Duplicate prevention is the combination of:
+  - deterministic ID (`TX-SALARY-YYYY-MM`);
+  - `findRowIndexByColumnValue` lookup by `id` before any write;
+  - the engine's `isSalaryMovement` predicate, which now also matches the `TX-SALARY-` prefix used everywhere.
+
+Implementation: `ensureSalaryForMonth({ sheetId, monthKey, config })` in `src/lib/finance/salary.ts`. Called by the dashboard when the user opens the selected month and the movement is missing.
 
 ### 4.3 Variable salary
 
@@ -71,9 +91,14 @@ Variable salary is entered manually by the user for each month.
 
 Rules:
 
-- When the user saves the variable salary for a month, create or update the corresponding income movement.
-- The amount must remain saved for that month so future calculations remain correct.
-- It must not be auto-created unless the user confirms/saves it.
+- The app must NOT auto-create a movement for variable salary.
+- The salary config UI in `/more/salary` exposes a "Guardar nomina del mes" action for the current month.
+- When the user saves, the app calls `saveVariableSalaryForMonth({ sheetId, monthKey, amount, destinationAccount })`.
+- The movement uses the same deterministic ID `TX-SALARY-YYYY-MM` as fixed salary. If a row with that ID exists, it is updated; otherwise it is created. Saving twice never duplicates.
+- The amount is persisted in the Sheet so future calculations can read it again.
+- Destination account is required. If the user has not chosen one, the action is disabled.
+
+Implementation: `saveVariableSalaryForMonth` in `src/lib/finance/salary.ts`. The dashboard's "Ahorro del mes" widget and any other auto-save flows must NOT touch the variable salary row.
 
 ## 5. Expense model
 
@@ -723,6 +748,8 @@ This section defines the next phases clearly. Each phase must end with `npx tsc 
 - `ensureSalaryForMonth` runs on any day the user opens the app for that month (not only day 1).
 - Variable salary: add UI in `/more/salary` to save the current month amount; this creates/updates `TX-SALARY-YYYY-MM-VAR` (or reuses the same deterministic id pattern).
 - Wire `cuentaDestino` to the salary movement.
+
+**Status (Phase 5)**: implemented. See sections 4.1, 4.2 and 4.3 for the official logic.
 
 ### Phase 6 — Fixed expenses confirmation
 

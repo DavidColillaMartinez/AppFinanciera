@@ -385,28 +385,72 @@ Priority order:
 
 ## 15. Finance engine requirement
 
-Create or maintain a central finance engine, for example:
+The central finance engine lives in:
 
 `src/lib/finance/finance-engine.ts`
 
-It should expose pure functions for:
+It is re-exported from `src/lib/finance/index.ts`.
 
-- monthly income;
-- salary for month;
-- variable expenses;
-- fixed expenses confirmed;
-- fixed expenses pending confirmation;
-- deferred payments;
-- future payment provisions;
-- general savings;
-- monthly savings;
-- available balance;
-- available balance explanation;
-- goal progress;
-- reserve progress;
-- future payment progress.
+### 15.1 Contract
 
-Dashboard and other screens must consume this engine instead of implementing their own calculations.
+- Pure TypeScript functions. No React, no Zustand, no Google Sheets API.
+- Do not mutate input arrays.
+- All data is passed in as arguments; functions only compute and return.
+- The input shape is `FinanceContext`, built via `buildFinanceContext(input)`.
+
+### 15.2 Exposed functions
+
+- Income
+  - `getMonthlyIncome(ctx)` — total `Ingreso` movements for the month.
+  - `getSalaryForMonth(ctx)` — sum of salary movements (id prefix `TX-SALARY-` or `SALARY-`).
+  - `getExtraIncome(ctx)` — `getMonthlyIncome − getSalaryForMonth`.
+- Expenses
+  - `getVariableExpenses(ctx)` — `Gasto` movements excluding confirmed fixed expense movements.
+  - `getFixedExpensesConfirmed(ctx)` — sum of `Gastos_fijos` whose `fijoId` is in `confirmedFixedExpenseIds`.
+  - `getFixedExpensesPending(ctx)` — sum of active `Gastos_fijos` not yet confirmed.
+  - `getDeferredPayments(ctx)` — sum of `cuotaMensual` for active installments.
+  - `getTotalExpenses(ctx)` — sum of the four above.
+- Future payment provisions
+  - `getFuturePaymentProvisions(ctx)` — sum of `aporteMensual` for active future payments; if missing and `mesesRestantes > 0`, derive as `(importeObjetivo − saldoReservado) / mesesRestantes`.
+- Savings
+  - `getGeneralSavings(ctx)` — aggregated savings state across reserves, goals and future payment provisions.
+  - `getMonthlySavings(ctx)` — savings contributions for the month, split by `tipoDestino` and a `general` bucket for legacy `Ahorro` movements without `reservaId`.
+  - `getSavingsBreakdown(ctx)` — per-target detail (reserves, goals, future payments).
+- Available balance
+  - `getAvailableBalance(ctx)` — full breakdown with `explanation` array.
+  - `explainAvailableBalance(values)` — produces the `explanation` array.
+- Progress
+  - `getReserveProgress(reserveId, ctx)`, `getGoalProgress(goalId, ctx)`, `getFuturePaymentProgress(pagoId, ctx)` — return `SavingsTargetDetail | null`.
+- Top level
+  - `getDashboardSummary(ctx)` — `DashboardFinanceSummary` aggregating the above.
+  - `buildFinanceContext(input)` — assembles a `FinanceContext` with sane defaults.
+
+### 15.3 Naming convention
+
+- Primitives in `src/lib/finance/calculations.ts` keep the `calculate*` prefix (e.g. `calculateExpensesByCategory`).
+- Engine functions in `src/lib/finance/finance-engine.ts` use the `get*` prefix (e.g. `getMonthlyIncome`). This avoids name collisions between primitive and engine APIs and matches the canonical spec.
+
+### 15.4 Balance source of truth
+
+For `Reservas`, `Objetivos` and `Pagos_futuros`, the engine derives the saved amount from `Mov_reservas` when at least one matching movement exists. When the ledger is empty for a target, the engine falls back to the `saldoActual` (or `saldoReservado`) field on the model. This keeps the engine backward compatible with rows that pre-date the `Mov_reservas` ledger (Phase 7 will switch writes to the ledger).
+
+### 15.5 Available balance formula
+
+```
+available = income
+          − variableExpenses
+          − fixedExpensesConfirmed
+          − fixedExpensesPending
+          − deferredPayments
+          − futurePaymentProvisions
+          − plannedSavings
+```
+
+`plannedSavings` is derived as `max(0, (income − variableExpenses − fixedConfirmed − fixedPending − deferred) × 0.2)`. This default 20% rate is a placeholder until a user-configurable savings goal is added in a later phase.
+
+### 15.6 Consumption
+
+Dashboard and other screens MUST consume the engine instead of implementing their own calculations. A convenience hook `useFinanceSummary({ monthKey?, confirmedFixedExpenseIds?, confirmedDeferredPaymentIds? })` is provided in `src/hooks/use-finance-summary.ts`. It loads all the necessary data via the existing React Query hooks, builds a `FinanceContext` and returns a memoized `DashboardFinanceSummary`.
 
 ## 16. Current Implementation Audit
 
@@ -666,6 +710,8 @@ This section defines the next phases clearly. Each phase must end with `npx tsc 
   - `getGoalProgress(goalId, ctx)`, `getReserveProgress(reserveId, ctx)`, `getFuturePaymentProgress(pagoId, ctx)`.
 - `src/lib/finance/index.ts` re-exports the engine.
 - Existing `calculations.ts` helpers stay as primitives; the engine uses them.
+
+**Status (Phase 4)**: implemented. See section 15 for the actual function list, naming convention and balance source of truth. Dashboard consumption is scheduled for Phase 8.
 
 ### Phase 5 — Salary
 

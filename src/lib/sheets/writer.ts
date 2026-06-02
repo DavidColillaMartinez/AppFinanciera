@@ -5,6 +5,7 @@ import {
   updateCell,
   getToken,
 } from "./client";
+import { SHEET_NAMES, CONFIG_HEADERS } from "@/constants/sheet-structure";
 
 export async function getSheetHeaders(
   spreadsheetId: string,
@@ -106,6 +107,81 @@ export async function softDeleteRow(
     { deletedAt: new Date().toISOString() },
     accessToken,
   );
+}
+
+export interface WriteConfigValuesResult {
+  updated: number;
+  appended: number;
+}
+
+export async function writeConfigValues(
+  spreadsheetId: string,
+  values: Record<string, string>,
+  accessToken: string,
+): Promise<WriteConfigValuesResult> {
+  const headers = await getSheetHeaders(
+    spreadsheetId,
+    SHEET_NAMES.CONFIG,
+    accessToken,
+  );
+  const claveIndex = headers.indexOf("Clave");
+  const valorIndex = headers.indexOf("Valor");
+
+  if (claveIndex === -1 || valorIndex === -1) {
+    throw new Error(
+      "La hoja Config no tiene las columnas requeridas (Clave, Valor).",
+    );
+  }
+
+  const dataRange = `${SHEET_NAMES.CONFIG}!A2:${String.fromCharCode(65 + headers.length - 1)}`;
+  const dataResult = await batchGetSheet(spreadsheetId, dataRange, accessToken);
+
+  const rowByClave = new Map<string, number>();
+  for (let i = 0; i < dataResult.values.length; i++) {
+    const clave = String(dataResult.values[i]?.[claveIndex] ?? "").trim();
+    if (clave) {
+      rowByClave.set(clave, i + 2);
+    }
+  }
+
+  let updated = 0;
+  let appended = 0;
+  const appends: string[][] = [];
+
+  for (const [clave, valor] of Object.entries(values)) {
+    const existingRow = rowByClave.get(clave);
+    if (existingRow !== undefined) {
+      const colLetter = String.fromCharCode(65 + valorIndex);
+      const cellRange = `${SHEET_NAMES.CONFIG}!${colLetter}${existingRow}`;
+      await batchUpdateSheet(spreadsheetId, cellRange, [[valor]], accessToken);
+      updated++;
+    } else {
+      const row = new Array(headers.length).fill("");
+      row[claveIndex] = clave;
+      row[valorIndex] = valor;
+      appends.push(row);
+      appended++;
+    }
+  }
+
+  if (appends.length > 0) {
+    for (const row of appends) {
+      const data: Record<string, string | number | boolean | undefined> = {};
+      for (let i = 0; i < CONFIG_HEADERS.length; i++) {
+        const col = CONFIG_HEADERS[i];
+        data[col] = row[i] ?? "";
+      }
+      await appendModelRow(
+        spreadsheetId,
+        SHEET_NAMES.CONFIG,
+        CONFIG_HEADERS,
+        data,
+        accessToken,
+      );
+    }
+  }
+
+  return { updated, appended };
 }
 
 export { getToken };

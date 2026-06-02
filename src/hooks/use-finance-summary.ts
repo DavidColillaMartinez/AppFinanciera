@@ -11,6 +11,7 @@ import { useDeferredPayments } from "@/features/deferred-payments/hooks/use-defe
 import { useReserves } from "@/features/reserves/hooks/use-reserves";
 import { useGoals } from "@/features/goals/hooks/use-goals";
 import { useReserveMovements } from "@/features/reserve-movements/hooks/use-reserve-movements";
+import { useSalaryConfig } from "@/features/salary/hooks/use-salary";
 import {
   buildFinanceContext,
   getDashboardSummary,
@@ -33,7 +34,7 @@ export interface UseFinanceSummaryResult {
 export function useFinanceSummary(
   options: UseFinanceSummaryOptions = {},
 ): UseFinanceSummaryResult {
-  const { sheetId, monthlyIncome, incomeType } = useAppStore();
+  const { sheetId } = useAppStore();
 
   const monthKey =
     options.monthKey ?? new Date().toISOString().slice(0, 7);
@@ -47,6 +48,7 @@ export function useFinanceSummary(
   const { data: reserves, isLoading: lR } = useReserves(sheetId);
   const { data: goals, isLoading: lG } = useGoals(sheetId);
   const { data: reserveMovements, isLoading: lRM } = useReserveMovements(sheetId);
+  const { data: salaryConfig, isLoading: lS } = useSalaryConfig(sheetId);
 
   const summary = useMemo(() => {
     const ctx = buildFinanceContext({
@@ -60,8 +62,8 @@ export function useFinanceSummary(
       reserves: reserves ?? [],
       goals: goals ?? [],
       reserveMovements: reserveMovements ?? [],
-      monthlyIncome,
-      incomeType,
+      monthlyIncome: salaryConfig?.enabled ? salaryConfig.fixedAmount : 0,
+      incomeType: salaryConfig?.type ?? "fixed",
       confirmedFixedExpenseIds: options.confirmedFixedExpenseIds,
       confirmedDeferredPaymentIds: options.confirmedDeferredPaymentIds,
     });
@@ -77,8 +79,7 @@ export function useFinanceSummary(
     reserves,
     goals,
     reserveMovements,
-    monthlyIncome,
-    incomeType,
+    salaryConfig,
     options.confirmedFixedExpenseIds,
     options.confirmedDeferredPaymentIds,
   ]);
@@ -86,7 +87,7 @@ export function useFinanceSummary(
   return {
     summary,
     isLoading:
-      lT || lC || lA || lF || lFP || lD || lR || lG || lRM,
+      lT || lC || lA || lF || lFP || lD || lR || lG || lRM || lS,
     isError: eT,
   };
 }

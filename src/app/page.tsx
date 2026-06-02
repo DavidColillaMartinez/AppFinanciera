@@ -44,7 +44,10 @@ import { cn } from "@/lib/utils";
 import {
   calculateExpensesByCategory,
 } from "@/lib/finance/calculations";
-import { ensureMonthlySalary, shouldAddSalaryToday } from "@/lib/finance/salary";
+import { ensureSalaryForMonth, buildSalaryMovementId } from "@/lib/finance/salary";
+import { useSalaryConfig } from "@/features/salary/hooks/use-salary";
+import { useEnsureSalaryForMonth } from "@/features/salary/hooks/use-salary";
+import { generateMonthKey } from "@/lib/sheets/adapters";
 import {
   PieChart,
   Pie,
@@ -139,7 +142,6 @@ export default function VistaMesPage() {
     dashboardConfig,
     monthlyIncome,
     incomeType,
-    salaryAddedMonths,
     addSalaryMonth,
   } = useAppStore();
   const [selectedMonth, setSelectedMonth] = useState(
@@ -182,23 +184,32 @@ export default function VistaMesPage() {
   const { data: fixedExpenses } = useFixedExpenses(sheetId);
   const { data: futurePayments } = useFuturePayments(sheetId);
   const { data: deferredPayments } = useDeferredPayments(sheetId);
+  const { data: salaryConfig } = useSalaryConfig(sheetId);
+  const ensureSalary = useEnsureSalaryForMonth(sheetId);
 
   useEffect(() => {
-    if (!sheetId || incomeType !== "fixed" || !monthlyIncome) return;
-    if (!shouldAddSalaryToday(incomeType, salaryAddedMonths)) return;
+    if (!sheetId || !salaryConfig) return;
+    if (!salaryConfig.enabled) return;
+    if (salaryConfig.type !== "fixed") return;
+    if (selectedMonth !== generateMonthKey(new Date().toISOString())) return;
 
+    const salaryMovementId = buildSalaryMovementId(selectedMonth);
+    const alreadyPresent = (transactions ?? []).some(
+      (t) => t.id === salaryMovementId,
+    );
+    if (alreadyPresent) return;
+
+    let cancelled = false;
     async function addSalary() {
-      if (!sheetId) return;
+      if (cancelled || !sheetId || !salaryConfig) return;
       try {
-        const result = await ensureMonthlySalary(
-          sheetId as string,
-          monthlyIncome,
-          incomeType,
-          salaryAddedMonths,
-          addSalaryMonth
-        );
-        if (result.added) {
+        const result = await ensureSalary.mutateAsync({
+          monthKey: selectedMonth,
+          config: salaryConfig,
+        });
+        if (result.created) {
           setSalaryAutoAdded(true);
+          addSalaryMonth(selectedMonth);
           await refetchTransactions();
         }
       } catch (e) {
@@ -206,7 +217,18 @@ export default function VistaMesPage() {
       }
     }
     addSalary();
-  }, [sheetId, monthlyIncome, incomeType, salaryAddedMonths]);
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    sheetId,
+    salaryConfig,
+    selectedMonth,
+    transactions,
+    ensureSalary,
+    addSalaryMonth,
+    refetchTransactions,
+  ]);
 
   const filteredTransactions = useMemo(
     () => transactions ?? [],
