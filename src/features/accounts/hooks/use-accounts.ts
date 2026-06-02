@@ -10,12 +10,19 @@ import {
 } from "@/lib/sheets/writer";
 import type { AccountRow } from "@/types/models";
 import { nowISO } from "@/lib/sheets/adapters";
+import { AccountRole } from "@/constants/enums";
 
 function rowToAccount(row: Record<string, string>): AccountRow {
+  const rawRol = String(row.rol ?? "").trim().toLowerCase();
+  const allowedRoles = Object.values(AccountRole) as string[];
+  const rol: AccountRow["rol"] = allowedRoles.includes(rawRol)
+    ? (rawRol as AccountRow["rol"])
+    : AccountRole.GENERAL;
   return {
     cuentaId: row.cuentaId ?? "",
     nombre: row.nombre ?? "",
     tipo: (row.tipo as AccountRow["tipo"]) ?? "Banco",
+    rol,
     moneda: row.moneda ?? "EUR",
     saldoInicial: Number(row.saldoInicial) || 0,
     saldoActualManual: Number(row.saldoActualManual) || 0,
@@ -52,6 +59,7 @@ export function useCreateAccount(sheetId: string | null) {
     mutationFn: async (data: {
       nombre: string;
       tipo: string;
+      rol?: string;
       moneda?: string;
       saldoInicial?: number;
       saldoActualManual?: number;
@@ -64,10 +72,16 @@ export function useCreateAccount(sheetId: string | null) {
       if (!token) throw new Error("No access token");
 
       const now = nowISO();
+      const allowedRoles = Object.values(AccountRole) as string[];
+      const requestedRol = String(data.rol ?? "").trim().toLowerCase();
+      const rol: AccountRow["rol"] = allowedRoles.includes(requestedRol)
+        ? (requestedRol as AccountRow["rol"])
+        : AccountRole.GENERAL;
       const rowData = {
         cuentaId: `ACC-${Date.now()}`,
         nombre: data.nombre,
         tipo: data.tipo as AccountRow["tipo"],
+        rol,
         moneda: data.moneda ?? "EUR",
         saldoInicial: data.saldoInicial ?? 0,
         saldoActualManual: data.saldoActualManual ?? 0,
@@ -105,6 +119,7 @@ export function useUpdateAccount(sheetId: string | null) {
       cuentaId: string;
       nombre: string;
       tipo: string;
+      rol?: string;
       moneda?: string;
       saldoInicial?: number;
       saldoActualManual?: number;
@@ -126,10 +141,16 @@ export function useUpdateAccount(sheetId: string | null) {
       if (rowIndex === null) throw new Error("Cuenta no encontrada");
 
       const now = nowISO();
+      const allowedRoles = Object.values(AccountRole) as string[];
+      const requestedRol = String(data.rol ?? "").trim().toLowerCase();
+      const rol: AccountRow["rol"] = allowedRoles.includes(requestedRol)
+        ? (requestedRol as AccountRow["rol"])
+        : AccountRole.GENERAL;
 
       const updates = {
         nombre: data.nombre,
         tipo: data.tipo as AccountRow["tipo"],
+        rol,
         moneda: data.moneda ?? "EUR",
         saldoInicial: data.saldoInicial ?? 0,
         saldoActualManual: data.saldoActualManual ?? 0,

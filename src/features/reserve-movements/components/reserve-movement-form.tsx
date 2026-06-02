@@ -14,12 +14,12 @@ import {
   useUpdateReserveMovement,
 } from "../hooks/use-reserve-movements";
 import type { ReserveMovementRow } from "@/types/models";
-import { ReserveMovementType } from "@/constants/enums";
+import { TipoMovimientoReserva } from "@/constants/enums";
 
 const reserveMovementSchema = z.object({
   tipoMovimiento: z.enum([
-    ReserveMovementType.APORTACION,
-    ReserveMovementType.DISPOSICION,
+    TipoMovimientoReserva.APORTE,
+    TipoMovimientoReserva.RETIRADA,
   ]),
   importe: z.number().min(0.01, "El importe debe ser positivo"),
   cuentaOrigen: z.string().optional(),
@@ -31,12 +31,12 @@ type ReserveMovementInput = z.infer<typeof reserveMovementSchema>;
 
 const movementTypes = [
   {
-    value: ReserveMovementType.APORTACION,
-    label: "Aportacion (entrada)",
+    value: TipoMovimientoReserva.APORTE,
+    label: "Aporte (entrada)",
   },
   {
-    value: ReserveMovementType.DISPOSICION,
-    label: "Disposicion (salida)",
+    value: TipoMovimientoReserva.RETIRADA,
+    label: "Retirada (salida)",
   },
 ];
 
@@ -78,7 +78,7 @@ export function ReserveMovementForm({
           notas: initialData.notas,
         }
       : {
-          tipoMovimiento: ReserveMovementType.APORTACION,
+          tipoMovimiento: TipoMovimientoReserva.APORTE,
           importe: 0,
           cuentaOrigen: "",
           cuentaDestino: "",
@@ -126,7 +126,7 @@ export function ReserveMovementForm({
               <Select
                 id="tipoMovimiento"
                 options={movementTypes}
-                value={watch("tipoMovimiento") ?? ReserveMovementType.APORTACION}
+                value={watch("tipoMovimiento") ?? TipoMovimientoReserva.APORTE}
                 onChange={(e) =>
                   setValue(
                     "tipoMovimiento",

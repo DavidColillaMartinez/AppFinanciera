@@ -2,11 +2,14 @@ import type {
   TransactionType,
   CategoryType,
   AccountType,
+  AccountRole,
   GenericStatus,
   Priority,
   GoalType,
   ReserveType,
   ReserveMovementType,
+  TipoDestinoReserva,
+  TipoMovimientoReserva,
   Frequency,
 } from "@/constants/enums";
 
@@ -53,6 +56,7 @@ export interface AccountRow {
   cuentaId: string;
   nombre: string;
   tipo: AccountType;
+  rol: AccountRole;
   moneda: string;
   saldoInicial: number;
   saldoActualManual: number;
@@ -132,13 +136,17 @@ export interface ReserveRow {
 export interface ReserveMovementRow {
   id: string;
   fecha: string;
+  mesClave: string;
+  tipoDestino: TipoDestinoReserva;
+  destinoId: string;
   reservaId: string;
-  tipoMovimiento: ReserveMovementType;
+  tipoMovimiento: TipoMovimientoReserva;
   importe: number;
   cuentaOrigen: string;
   cuentaDestino: string;
   notas: string;
   createdAt: string;
+  updatedAt: string;
 }
 
 export interface InstallmentPaymentRow {

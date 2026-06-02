@@ -8,22 +8,59 @@ import {
   getToken,
 } from "@/lib/sheets/writer";
 import type { ReserveMovementRow } from "@/types/models";
-import { nowISO } from "@/lib/sheets/adapters";
-import { ReserveMovementType } from "@/constants/enums";
+import { nowISO, generateMonthKey } from "@/lib/sheets/adapters";
+import {
+  ReserveMovementType,
+  TipoDestinoReserva,
+  TipoMovimientoReserva,
+} from "@/constants/enums";
+
+function normalizeTipoMovimiento(
+  raw: string,
+): ReserveMovementRow["tipoMovimiento"] {
+  const value = String(raw ?? "").trim().toLowerCase();
+  if (value === "aporte" || value === "aportacion") {
+    return TipoMovimientoReserva.APORTE;
+  }
+  if (value === "retirada" || value === "disposicion") {
+    return TipoMovimientoReserva.RETIRADA;
+  }
+  return TipoMovimientoReserva.APORTE;
+}
+
+function normalizeTipoDestino(
+  raw: string,
+): ReserveMovementRow["tipoDestino"] {
+  const value = String(raw ?? "").trim().toLowerCase();
+  if (value === TipoDestinoReserva.OBJETIVO) {
+    return TipoDestinoReserva.OBJETIVO;
+  }
+  if (value === TipoDestinoReserva.PAGO_FUTURO) {
+    return TipoDestinoReserva.PAGO_FUTURO;
+  }
+  return TipoDestinoReserva.RESERVA;
+}
 
 function rowToReserveMovement(
   row: Record<string, string>,
 ): ReserveMovementRow {
+  const reservaId = row.reservaId ?? "";
+  const destinoId = row.destinoId ?? reservaId;
+  const tipoDestino = normalizeTipoDestino(row.tipoDestino);
   return {
     id: row.id ?? "",
     fecha: row.fecha ?? "",
-    reservaId: row.reservaId ?? "",
-    tipoMovimiento: (row.tipoMovimiento as ReserveMovementRow["tipoMovimiento"]) ?? ReserveMovementType.APORTACION,
+    mesClave: row.mesClave ?? "",
+    tipoDestino,
+    destinoId,
+    reservaId,
+    tipoMovimiento: normalizeTipoMovimiento(row.tipoMovimiento),
     importe: Number(row.importe) || 0,
     cuentaOrigen: row.cuentaOrigen ?? "",
     cuentaDestino: row.cuentaDestino ?? "",
     notas: row.notas ?? "",
     createdAt: row.createdAt ?? "",
+    updatedAt: row.updatedAt ?? "",
   };
 }
 
@@ -64,16 +101,21 @@ export function useCreateReserveMovement(sheetId: string | null) {
       if (!token) throw new Error("No access token");
 
       const now = nowISO();
+      const fecha = new Date().toISOString().split("T")[0];
       const rowData = {
         id: `MOVRES-${Date.now()}`,
-        fecha: new Date().toISOString().split("T")[0],
+        fecha,
+        mesClave: generateMonthKey(fecha),
+        tipoDestino: TipoDestinoReserva.RESERVA,
+        destinoId: data.reservaId,
         reservaId: data.reservaId,
-        tipoMovimiento: data.tipoMovimiento as ReserveMovementRow["tipoMovimiento"],
+        tipoMovimiento: normalizeTipoMovimiento(data.tipoMovimiento),
         importe: data.importe,
         cuentaOrigen: data.cuentaOrigen ?? "",
         cuentaDestino: data.cuentaDestino ?? "",
         notas: data.notas ?? "",
         createdAt: now,
+        updatedAt: now,
       };
 
       await appendModelRow(
@@ -119,11 +161,12 @@ export function useUpdateReserveMovement(sheetId: string | null) {
       if (rowIndex === null) throw new Error("Movimiento no encontrado");
 
       const updates: Record<string, string | number> = {
-        tipoMovimiento: data.tipoMovimiento as ReserveMovementRow["tipoMovimiento"],
+        tipoMovimiento: normalizeTipoMovimiento(data.tipoMovimiento),
         importe: data.importe,
         cuentaOrigen: data.cuentaOrigen ?? "",
         cuentaDestino: data.cuentaDestino ?? "",
         notas: data.notas ?? "",
+        updatedAt: nowISO(),
       };
 
       await updateRowByColumn(

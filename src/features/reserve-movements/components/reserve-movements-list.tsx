@@ -18,7 +18,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import type { ReserveMovementRow } from "@/types/models";
-import { ReserveMovementType } from "@/constants/enums";
+import { TipoMovimientoReserva } from "@/constants/enums";
 import { cn } from "@/lib/utils";
 
 interface ReserveMovementsProps {
@@ -62,11 +62,11 @@ export function ReserveMovements({
   }
 
   const totalAportaciones = (movements ?? [])
-    .filter((m) => m.tipoMovimiento === ReserveMovementType.APORTACION)
+    .filter((m) => m.tipoMovimiento === TipoMovimientoReserva.APORTE)
     .reduce((acc, m) => acc + m.importe, 0);
 
   const totalDisposiciones = (movements ?? [])
-    .filter((m) => m.tipoMovimiento === ReserveMovementType.DISPOSICION)
+    .filter((m) => m.tipoMovimiento === TipoMovimientoReserva.RETIRADA)
     .reduce((acc, m) => acc + m.importe, 0);
 
   return (
@@ -150,13 +150,13 @@ export function ReserveMovements({
                         className={cn(
                           "rounded-lg p-2",
                           movement.tipoMovimiento ===
-                            ReserveMovementType.APORTACION
+                            TipoMovimientoReserva.APORTE
                             ? "bg-income/10"
                             : "bg-expense/10",
                         )}
                       >
                         {movement.tipoMovimiento ===
-                        ReserveMovementType.APORTACION ? (
+                        TipoMovimientoReserva.APORTE ? (
                           <ArrowDownLeft className="h-4 w-4 text-income" />
                         ) : (
                           <ArrowUpRight className="h-4 w-4 text-expense" />
@@ -166,9 +166,9 @@ export function ReserveMovements({
                         <div className="flex items-center gap-2">
                           <p className="font-medium text-sm">
                             {movement.tipoMovimiento ===
-                            ReserveMovementType.APORTACION
-                              ? "Aportacion"
-                              : "Disposicion"}
+                            TipoMovimientoReserva.APORTE
+                              ? "Aporte"
+                              : "Retirada"}
                           </p>
                           <Badge variant="outline" className="text-xs">
                             {movement.fecha}
@@ -197,13 +197,13 @@ export function ReserveMovements({
                         className={cn(
                           "text-lg font-bold",
                           movement.tipoMovimiento ===
-                            ReserveMovementType.APORTACION
+                            TipoMovimientoReserva.APORTE
                             ? "text-income"
                             : "text-expense",
                         )}
                       >
                         {movement.tipoMovimiento ===
-                        ReserveMovementType.APORTACION
+                        TipoMovimientoReserva.APORTE
                           ? "+"
                           : "-"}
                         {movement.importe.toFixed(2)}

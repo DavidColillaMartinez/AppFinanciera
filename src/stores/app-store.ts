@@ -100,6 +100,7 @@ export interface AppActions {
   updateChart: (chartId: string, updates: Partial<DashboardChart>) => void;
   removeChart: (chartId: string) => void;
   reorderCharts: (fromIndex: number, toIndex: number) => void;
+  setTemplateVersion: (templateVersion: string | null, appMinVersion: string | null) => void;
 }
 
 export const useAppStore = create<AppState & AppActions>()(
@@ -257,6 +258,9 @@ export const useAppStore = create<AppState & AppActions>()(
             dashboardConfig: { ...state.dashboardConfig, charts },
           };
         }),
+
+      setTemplateVersion: (templateVersion, appMinVersion) =>
+        set({ templateVersion, appMinVersion }),
     }),
     {
       name: STORAGE_KEY,

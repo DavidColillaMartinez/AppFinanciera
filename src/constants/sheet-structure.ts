@@ -48,6 +48,7 @@ export const CUENTAS_HEADERS = [
   "cuentaId",
   "nombre",
   "tipo",
+  "rol",
   "moneda",
   "saldoInicial",
   "saldoActualManual",
@@ -111,6 +112,9 @@ export const PAGOS_APLAZADOS_HEADERS = [
 export const MOV_RESERVAS_HEADERS = [
   "id",
   "fecha",
+  "mesClave",
+  "tipoDestino",
+  "destinoId",
   "reservaId",
   "tipoMovimiento",
   "importe",
@@ -118,6 +122,7 @@ export const MOV_RESERVAS_HEADERS = [
   "cuentaDestino",
   "notas",
   "createdAt",
+  "updatedAt",
 ] as const;
 
 export const SHEET_LEGACY = {

@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label";
 import { isGoogleAuthConfigured } from "@/lib/google/auth";
 import { useAppStore } from "@/stores/app-store";
 import { SHEET_NAMES } from "@/constants/sheet-structure";
-import { validateSheetCompatibility } from "@/lib/sheets/reader";
+import { validateSheetCompatibility, readConfig } from "@/lib/sheets/reader";
 import { getToken } from "@/lib/sheets/client";
 import { AlertCircle, CheckCircle2 } from "lucide-react";
 
@@ -27,7 +27,7 @@ function OnboardingContent() {
   const errorParam = searchParams.get("error");
   const stepParam = searchParams.get("step");
 
-  const { sheetId, isConnected, setSheetConnection, hasSeenOnboarding } =
+  const { sheetId, isConnected, setSheetConnection, hasSeenOnboarding, setTemplateVersion } =
     useAppStore();
   const [step, setStep] = useState<Step>("google");
   const [sheetUrl, setSheetUrl] = useState(() => {
@@ -143,6 +143,16 @@ function OnboardingContent() {
 
       if (warnings.length > 0) {
         console.warn("Sheet compatibility warnings:", warnings);
+      }
+
+      try {
+        const config = await readConfig(parsed);
+        setTemplateVersion(
+          config["templateVersion"] ?? null,
+          config["appMinVersion"] ?? null,
+        );
+      } catch (e) {
+        console.warn("Could not read Config sheet:", (e as Error).message);
       }
 
       const ADVANCED_SHEETS = [

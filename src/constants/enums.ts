@@ -79,3 +79,29 @@ export const ReserveMovementType = {
 
 export type ReserveMovementType =
   (typeof ReserveMovementType)[keyof typeof ReserveMovementType];
+
+export const TipoDestinoReserva = {
+  RESERVA: "reserva",
+  OBJETIVO: "objetivo",
+  PAGO_FUTURO: "pago_futuro",
+} as const;
+
+export type TipoDestinoReserva =
+  (typeof TipoDestinoReserva)[keyof typeof TipoDestinoReserva];
+
+export const TipoMovimientoReserva = {
+  APORTE: "aporte",
+  RETIRADA: "retirada",
+} as const;
+
+export type TipoMovimientoReserva =
+  (typeof TipoMovimientoReserva)[keyof typeof TipoMovimientoReserva];
+
+export const AccountRole = {
+  DIARIO: "diario",
+  FIJOS: "fijos",
+  AHORRO: "ahorro",
+  GENERAL: "general",
+} as const;
+
+export type AccountRole = (typeof AccountRole)[keyof typeof AccountRole];

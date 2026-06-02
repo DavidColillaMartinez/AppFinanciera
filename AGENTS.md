@@ -86,3 +86,30 @@ src/stores/app-store.ts (Zustand: connection state, config, salary tracking)
 - `postcss` pinned to `8.5.15` via overrides
 - `@tanstack/react-query@5` — `QueryClient` does NOT support `defaultOptions.queries.onError` in v5
 - `zustand` latest — persist middleware default merge is **shallow** (not deep)
+
+# Agent Rules — Finance Logic
+
+Before modifying any of the following areas, read `docs/FINANCE_LOGIC.md`:
+
+- financial calculations;
+- dashboard metrics;
+- available balance logic;
+- salary/payroll logic;
+- savings/reserves/goals logic;
+- fixed expenses logic;
+- future payments logic;
+- deferred/installment payments logic;
+- movement creation/editing logic;
+- Google Sheet schema, readers, writers or validation;
+- account balance or account role logic.
+
+Do not read or rewrite `docs/FINANCE_LOGIC.md` for purely visual changes such as spacing, colors, minor layout tweaks or copy-only changes.
+
+When changing the official finance logic:
+
+1. Copy the current content of `docs/FINANCE_LOGIC.md` into `docs/FINANCE_LOGIC.backup.md`.
+2. Update `docs/FINANCE_LOGIC.md` with the new official logic.
+3. Keep the document concise, practical and aligned with the current implementation.
+
+The Google Sheet is the database. The app contains all business logic.
+
