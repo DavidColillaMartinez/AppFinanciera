@@ -402,6 +402,44 @@ live in `docs/FINANCE_AUDIT.md`.
   - `src/app/fixed-expenses/confirm/page.tsx`
 - **See**: `FINANCE_AUDIT.md` A11, A14.
 
+## Phase 12 — Emergency functional repair and mobile responsive sweep — `pending`
+
+- **Purpose**: fix the critical functional bugs discovered during the mobile
+  audit (account starting balance not reflected, account form missing `rol`,
+  `saldoActualManual` shown in the UI), tighten form feedback, and repair
+  the mobile responsive layout across the app.
+- **Main files** (in progress):
+  - `src/lib/finance/account-balances.ts` — new. `computeAccountBalance` and
+    `computeAllAccountBalances` derive account balances from `saldoInicial`
+    plus the matching `Movimientos` rows (Ingreso adds to `cuentaDestino`,
+    Gasto subtracts from `cuentaOrigen`, Transferencia interna moves between
+    accounts).
+  - `src/lib/finance/index.ts` — re-exports the new module.
+  - `src/app/accounts/page.tsx` — `AccountForm` now includes a `rol`
+    selector, removes the `saldoActualManual` input, and shows the
+    calculated balance on the card. Delete uses `ConfirmDialog` instead of
+    `window.confirm`. Mobile layout: `grid-cols-1 sm:grid-cols-2` for
+    paired fields, sticky bottom action bar, `pb-24` to clear the bottom
+    nav.
+  - `src/app/settings/page.tsx` — category create / edit and seed actions
+    use `ConfirmDialog` instead of `window.confirm`. Toast feedback on
+    success. Mobile layout: `flex-col sm:flex-row` for the action row.
+  - `docs/FINANCE_LOGIC.md` §7.1 — new compact rule that codifies the
+    account balance formula and explains why `Mov_reservas` rows do not
+    change account balances.
+  - (next) `use-accounts.ts` and `use-categories.ts` — drop the
+    `["transactions"]` invalidation from create / update / delete. Add
+    `staleTime: 30_000` to all stable sheet reads.
+  - (next) mobile responsive sweep: every page with `grid-cols-2/3/4`
+    without a `sm:` breakpoint, every form without a sticky action bar, and
+    every list page without `pb-24`.
+- **Key conventions**:
+  - `saldoActualManual` is kept in the schema (legacy reads) but is no
+    longer exposed in the UI. The card shows the calculated balance.
+  - Account role values are the same four from §7: `diario`, `fijos`,
+    `ahorro`, `general`. The form defaults to `general` to match the
+    `rowToAccount` fallback.
+
 ---
 
 ## Status snapshot
@@ -418,3 +456,4 @@ live in `docs/FINANCE_AUDIT.md`.
 | 9 | Forms and movement flows | implemented |
 | 10 | Google session and Sheet connection recovery | implemented |
 | 11 | UI / design polish | implemented |
+| 12 | Emergency functional repair + mobile responsive sweep | pending |

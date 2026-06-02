@@ -4,6 +4,8 @@ import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { useToast } from "@/components/ui/toast";
 import { CategoryForm } from "@/features/categories/components/category-form";
 import {
   useCategories,
@@ -12,12 +14,9 @@ import {
   checkDuplicateCategory,
 } from "@/features/categories/hooks/use-categories";
 import { useAppStore } from "@/stores/app-store";
-import { EmptyState } from "@/components/states/empty-state";
 import { LoadingState } from "@/components/states/loading-state";
 import { ErrorState } from "@/components/states/error-state";
 import { PlusIcon, PencilIcon, TrashIcon, Tag, Sparkles, Settings } from "lucide-react";
-import { useToast } from "@/components/ui/toast";
-import type { CategoryRow } from "@/types/models";
 
 export default function SettingsPage() {
   const { sheetId } = useAppStore();
@@ -25,6 +24,8 @@ export default function SettingsPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [pendingSeed, setPendingSeed] = useState(false);
 
   const {
     data: categories,
@@ -39,19 +40,27 @@ export default function SettingsPage() {
     ? (categories ?? []).find((c) => c.categoriaId === editingId)
     : null;
 
+  const pendingDeleteCategory = pendingDeleteId
+    ? (categories ?? []).find((c) => c.categoriaId === pendingDeleteId)
+    : null;
+
   async function handleDelete(categoriaId: string) {
-    if (!confirm("Desactivar esta categoria?")) return;
+    setPendingDeleteId(categoriaId);
+  }
+
+  async function confirmDelete() {
+    if (!pendingDeleteId) return;
     try {
-      await deleteCategory.mutateAsync(categoriaId);
+      await deleteCategory.mutateAsync(pendingDeleteId);
       success("Categoria desactivada correctamente");
-    } catch (e) {
+    } catch {
       showError("Error al desactivar la categoria");
+    } finally {
+      setPendingDeleteId(null);
     }
   }
 
-  async function handleSeedCategories() {
-    if (!confirm("Crear categorias predefinidas? Esto no duplicara categorias existentes.")) return;
-
+  async function confirmSeed() {
     try {
       const result = await seedCategories.mutateAsync(categories ?? []);
       if (result.skipped) {
@@ -59,8 +68,10 @@ export default function SettingsPage() {
       } else {
         success(`${result.created} categorias creadas correctamente`);
       }
-    } catch (e) {
+    } catch {
       showError("Error al crear las categorias predefinidas");
+    } finally {
+      setPendingSeed(false);
     }
   }
 
@@ -77,8 +88,19 @@ export default function SettingsPage() {
     return true;
   }
 
+  function handleSubmitSuccess() {
+    setShowForm(false);
+    setEditingId(null);
+    setValidationError(null);
+    if (editingId) {
+      success("Categoria actualizada correctamente");
+    } else {
+      success("Categoria creada correctamente");
+    }
+  }
+
   return (
-    <div className="px-4 py-6 space-y-4">
+    <div className="px-4 py-6 space-y-4 pb-24">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold tracking-tight">Categorias</h1>
         <a
@@ -91,13 +113,13 @@ export default function SettingsPage() {
       </div>
 
       <div className="space-y-4">
-        <div className="flex justify-end gap-2">
+        <div className="flex flex-col sm:flex-row sm:justify-end gap-2">
           <Button
             variant="outline"
             size="sm"
-            onClick={handleSeedCategories}
+            onClick={() => setPendingSeed(true)}
             disabled={seedCategories.isPending}
-            className="gap-2"
+            className="gap-2 w-full sm:w-auto"
           >
             <Sparkles className="h-4 w-4" />
             Crear categorias predefinidas
@@ -109,25 +131,17 @@ export default function SettingsPage() {
               setShowForm(true);
               setValidationError(null);
             }}
+            className="w-full sm:w-auto"
           >
             <PlusIcon className="h-4 w-4 mr-1" />
             Nueva
           </Button>
         </div>
 
-        {validationError && (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
-            {validationError}
-          </div>
-        )}
-
         {showForm && !editingId && (
           <CategoryForm
             sheetId={sheetId}
-            onSuccess={() => {
-              setShowForm(false);
-              setValidationError(null);
-            }}
+            onSuccess={handleSubmitSuccess}
             onCancel={() => {
               setShowForm(false);
               setValidationError(null);
@@ -140,17 +154,19 @@ export default function SettingsPage() {
           <CategoryForm
             sheetId={sheetId}
             initialData={editingCategory}
-            onSuccess={() => {
-              setEditingId(null);
-              setShowForm(false);
-              setValidationError(null);
-            }}
+            onSuccess={handleSubmitSuccess}
             onCancel={() => {
               setEditingId(null);
               setValidationError(null);
             }}
             onValidate={handleCategoryValidation}
           />
+        )}
+
+        {validationError && !showForm && !editingId && (
+          <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+            {validationError}
+          </div>
         )}
 
         {isLoading && <LoadingState message="Cargando categorias..." />}
@@ -177,7 +193,7 @@ export default function SettingsPage() {
               </div>
               <div className="flex flex-col gap-2">
                 <Button
-                  onClick={handleSeedCategories}
+                  onClick={() => setPendingSeed(true)}
                   disabled={seedCategories.isPending}
                   variant="outline"
                   className="gap-2"
@@ -205,24 +221,24 @@ export default function SettingsPage() {
             {(categories ?? []).map((cat) => (
               <div
                 key={cat.categoriaId}
-                className="flex items-center justify-between p-3 rounded-lg border"
+                className="flex items-center justify-between p-3 rounded-lg border gap-3"
               >
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 min-w-0">
                   {cat.color && (
                     <div
                       className="w-3 h-3 rounded-full shrink-0"
                       style={{ backgroundColor: cat.color }}
                     />
                   )}
-                  <div>
-                    <p className="font-medium text-sm">{cat.nombre}</p>
-                    <p className="text-xs text-muted-foreground">
+                  <div className="min-w-0">
+                    <p className="font-medium text-sm truncate">{cat.nombre}</p>
+                    <p className="text-xs text-muted-foreground truncate">
                       {cat.grupo && `${cat.grupo} · `}
                       Presupuesto: {Number(cat.presupuestoMensual).toFixed(2)}
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 shrink-0">
                   <Badge
                     variant={
                       cat.tipoHabitual === "Ingreso" ? "success" : "outline"
@@ -231,6 +247,8 @@ export default function SettingsPage() {
                     {cat.tipoHabitual}
                   </Badge>
                   <button
+                    type="button"
+                    aria-label={`Editar ${cat.nombre}`}
                     onClick={() => {
                       setEditingId(cat.categoriaId);
                       setShowForm(false);
@@ -241,6 +259,8 @@ export default function SettingsPage() {
                     <PencilIcon className="h-4 w-4 text-muted-foreground" />
                   </button>
                   <button
+                    type="button"
+                    aria-label={`Desactivar ${cat.nombre}`}
                     onClick={() => handleDelete(cat.categoriaId)}
                     className="p-1.5 rounded-md hover:bg-muted transition-colors"
                   >
@@ -252,6 +272,31 @@ export default function SettingsPage() {
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={pendingDeleteId !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingDeleteId(null);
+        }}
+        title="Desactivar categoria"
+        description={
+          pendingDeleteCategory
+            ? `Estas seguro de desactivar "${pendingDeleteCategory.nombre}"? Los movimientos existentes no se eliminan, pero la categoria dejara de aparecer en selectores.`
+            : "Estas seguro?"
+        }
+        confirmLabel="Desactivar"
+        destructive
+        onConfirm={confirmDelete}
+      />
+
+      <ConfirmDialog
+        open={pendingSeed}
+        onOpenChange={setPendingSeed}
+        title="Crear categorias predefinidas"
+        description="Se anadiran las categorias predeterminadas que aun no tengas. Esto no duplicara categorias existentes."
+        confirmLabel="Crear"
+        onConfirm={confirmSeed}
+      />
     </div>
   );
 }

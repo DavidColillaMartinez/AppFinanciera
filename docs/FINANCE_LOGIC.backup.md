@@ -167,8 +167,10 @@ installment purchases, debt payments).
 
 - Active installments reduce available money via `getDeferredPayments(ctx)`
   (sum of `cuotaMensual`).
-- Will follow the same month-by-month confirmation pattern as fixed expenses
-  (deterministic ID `TX-DEFER-YYYY-MM-aplazadoId`). Tracked under Phase 7.
+- Deferred/installment payments should follow a month-by-month confirmation
+  pattern similar to fixed expenses, using deterministic IDs such as
+  `TX-DEFER-YYYY-MM-aplazadoId`. This remains pending for a future functional
+  phase unless already implemented elsewhere.
 
 ### 4.5 Unexpected expenses
 
@@ -411,8 +413,18 @@ These are two separate states and are persisted / cleared independently.
 
 ### 11.2 Token expiration recovery
 
-- The Sheets client (`src/lib/sheets/client.ts`) wraps every request in
-  `unwrapAuth`. When Google returns 401 or 403:
+- 401 and auth-related 403 errors trigger auth recovery. Sheet
+  permission 403 errors must be shown as Sheet access / permission
+  errors when distinguishable and must not force Google logout if the
+  Google session is still valid.
+- Practical classification (see `SheetsApiError.isAuthError()` and
+  `SheetsApiError.isPermissionError()` in `src/lib/sheets/client.ts`):
+  - `401` → auth recovery.
+  - `403` → Sheet permission / scope error. The Google session stays
+    valid; the user keeps the token and must re-share the Sheet or
+    re-grant scopes manually.
+  - `404` → "Sheet not found". The Google session stays valid.
+- Auth recovery path for `401`:
   1. `clearToken()` removes the bad token from `sessionStorage`.
   2. A `appfinanzas:auth-expired` custom event is dispatched.
   3. A `SheetsAuthError` is thrown to the caller.

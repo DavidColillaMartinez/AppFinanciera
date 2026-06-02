@@ -285,6 +285,29 @@ Accounts are real or user-defined money containers.
 - Expenses use a selected source account.
 - Savings move money from the source account to the selected saving destination.
 
+### 7.1 Account balance (saldo de cuenta)
+
+The current balance of an account is **derived from movements**, never typed
+by the user.
+
+```
+saldo = saldoInicial
+      + ingresos (Movimientos.cuentaDestino == cuentaId, tipo = Ingreso)
+      - gastos (Movimientos.cuentaOrigen == cuentaId, tipo = Gasto)
+      + transferenciasEntrantes (cuentaDestino, tipo = Transferencia interna)
+      - transferenciasSalientes (cuentaOrigen, tipo = Transferencia interna)
+```
+
+- `saldoInicial` is the only editable number; it is the starting point.
+- `saldoActualManual` is read from the Sheet for legacy compatibility but is
+  not shown in the UI. The schema accepts it so older rows keep loading.
+- `Mov_reservas` rows are internal to the savings ledger and do NOT change
+  account balances. Money that leaves an account to feed a reserve is a
+  `Transferencia interna` from the source account to the savings account.
+- Implementation: `src/lib/finance/account-balances.ts` with
+  `computeAccountBalance(account, transactions)` and
+  `computeAllAccountBalances(accounts, transactions)`.
+
 ## 8. Available balance
 
 ```
@@ -532,10 +555,11 @@ required structure is present. Visual formatting is irrelevant.
 - Phase 8.5 — critical post-dashboard fixes — **implemented**.
 - Phase 9 — forms and movement flows — **implemented**.
 - Phase 10 — Google session and Sheet connection recovery — **implemented**.
-- Phase 11 — UI / design polish — pending.
+- Phase 11 — UI / design polish — implemented.
+- Phase 12 — emergency functional repair and mobile responsive sweep — pending.
 
 Full phase details, files touched and conventions: `docs/FINANCE_IMPLEMENTATION.md`.
 
 ## 15. Next phase pointer
 
-**Phase 11 — UI / design polish.**
+**Phase 12 — emergency functional repair and mobile responsive sweep.**
