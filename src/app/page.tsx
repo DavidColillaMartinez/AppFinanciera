@@ -193,6 +193,9 @@ export default function VistaMesPage() {
   const isSalaryConfigured = Boolean(
     salaryConfig && salaryConfig.enabled && salaryConfig.fixedAmount > 0,
   );
+  const isVariableSalaryConfigured = Boolean(
+    salaryConfig && salaryConfig.enabled && salaryConfig.type === "variable",
+  );
 
   useEffect(() => {
     if (!sheetId || !salaryConfig) return;
@@ -371,12 +374,23 @@ export default function VistaMesPage() {
       <div className="px-4 py-6 space-y-4">
         <EmptyState
           title="Sesion de Google caducada"
-          description="Vuelve a iniciar sesion para continuar."
+          description="Tu sesion ha expirado. Necesitas volver a iniciar sesion."
           type="empty"
           action={{
-            label: "Reconectar",
+            label: "Reconectar Google",
             onClick: () => router.push("/onboarding?error=auth_failed&step=google"),
           }}
+          secondaryAction={
+            sheetId
+              ? {
+                  label: "Desconectar hoja",
+                  onClick: () => {
+                    useAppStore.getState().disconnect();
+                    router.push("/onboarding");
+                  },
+                }
+              : undefined
+          }
         />
       </div>
     );
@@ -706,7 +720,9 @@ export default function VistaMesPage() {
         available={available}
         pendingFixedCount={Math.max(0, pendingFixedCount)}
         savingsEmpty={!monthlySavingsHasAny}
-        salaryConfigured={isSalaryConfigured}
+        salaryConfigured={isSalaryConfigured || isVariableSalaryConfigured}
+        salaryType={salaryConfig?.type}
+        variableSalarySaved={isVariableSalaryConfigured}
       />
 
       <GeneralSavingsBreakdownModal

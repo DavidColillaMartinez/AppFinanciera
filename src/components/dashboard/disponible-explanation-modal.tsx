@@ -31,6 +31,8 @@ interface DisponibleExplanationModalProps {
   pendingFixedCount: number;
   savingsEmpty: boolean;
   salaryConfigured: boolean;
+  salaryType?: "fixed" | "variable";
+  variableSalarySaved?: boolean;
 }
 
 const TYPE_ICONS = {
@@ -64,6 +66,8 @@ export function DisponibleExplanationModal({
   pendingFixedCount,
   savingsEmpty,
   salaryConfigured,
+  salaryType,
+  variableSalarySaved,
 }: DisponibleExplanationModalProps) {
   const hasData =
     available.income > 0 ||
@@ -135,16 +139,20 @@ export function DisponibleExplanationModal({
             <AlertTriangle className="h-4 w-4 text-warning shrink-0 mt-0.5" />
             <div className="flex-1 space-y-1">
               <p className="font-medium text-foreground">
-                No has configurado la nómina.
+                {salaryType === "variable"
+                  ? "Nomina variable sin importe para este mes."
+                  : "No has configurado la nomina."}
               </p>
               <p className="text-muted-foreground">
-                El Disponible no incluye el sueldo hasta que lo hagas.
+                {salaryType === "variable"
+                  ? "El Disponible no incluye el sueldo hasta que introduzcas el importe de este mes."
+                  : "El Disponible no incluye el sueldo hasta que lo hagas."}
               </p>
               <Link
                 href="/more/salary"
                 className="text-primary font-medium hover:underline"
               >
-                Configurar nómina →
+                {salaryType === "variable" ? "Introducir importe →" : "Configurar nomina →"}
               </Link>
             </div>
           </div>

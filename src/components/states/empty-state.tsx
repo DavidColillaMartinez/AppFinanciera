@@ -12,6 +12,10 @@ interface EmptyStateProps {
     label: string;
     onClick?: () => void;
   };
+  secondaryAction?: {
+    label: string;
+    onClick?: () => void;
+  };
   type?: "empty" | "error";
 }
 
@@ -20,6 +24,7 @@ export function EmptyState({
   title,
   description,
   action,
+  secondaryAction,
   type = "empty",
 }: EmptyStateProps) {
   const Icon = type === "error" ? AlertCircle : Inbox;
@@ -42,6 +47,11 @@ export function EmptyState({
       {action && (
         <Button onClick={action.onClick} size="sm">
           {action.label}
+        </Button>
+      )}
+      {secondaryAction && (
+        <Button onClick={secondaryAction.onClick} size="sm" variant="outline">
+          {secondaryAction.label}
         </Button>
       )}
     </div>

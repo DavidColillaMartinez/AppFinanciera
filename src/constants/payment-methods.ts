@@ -9,6 +9,8 @@ export const PaymentMethod = {
 
 export type PaymentMethodType = (typeof PaymentMethod)[keyof typeof PaymentMethod];
 
+export const DEFAULT_PAYMENT_METHOD = PaymentMethod.TARJETA;
+
 export const PAYMENT_METHOD_OPTIONS = [
   { value: PaymentMethod.TARJETA, label: "Tarjeta" },
   { value: PaymentMethod.EFECTIVO, label: "Efectivo" },
@@ -23,9 +25,9 @@ const ALLOWED_VALUES = new Set<string>(
 );
 
 export function normalizePaymentMethod(raw: string | undefined | null): string {
-  if (!raw) return "";
+  if (!raw) return DEFAULT_PAYMENT_METHOD;
   const value = String(raw).trim();
-  if (!value) return "";
+  if (!value) return DEFAULT_PAYMENT_METHOD;
   if (ALLOWED_VALUES.has(value)) return value;
   const lower = value.toLowerCase();
   for (const allowed of ALLOWED_VALUES) {

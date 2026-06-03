@@ -34,6 +34,7 @@ export const transactionCreateSchema = transactionSchema
     deletedAt: true,
     mesClave: true,
   })
+  .partial({ concepto: true })
   .superRefine((data, ctx) => {
     if (data.tipo === TransactionType.INGRESO) {
       if (!data.cuentaDestino || data.cuentaDestino.length === 0) {
