@@ -17,9 +17,13 @@ import { useAppStore } from "@/stores/app-store";
 import { SHEET_NAMES } from "@/constants/sheet-structure";
 import { validateSheetCompatibility, readConfig } from "@/lib/sheets/reader";
 import { getToken, hasToken } from "@/lib/sheets/client";
-import { AlertCircle, CheckCircle2 } from "lucide-react";
+import { AlertCircle, CheckCircle2, Loader2, Plus } from "lucide-react";
+import {
+  copyTemplateToUserDrive,
+  getTemplateSheetIdOrThrow,
+} from "@/lib/google/drive";
 
-type Step = "google" | "sheet" | "validating" | "done" | "error";
+type Step = "google" | "sheet" | "validating" | "creating" | "done";
 
 function OnboardingContent() {
   const router = useRouter();
@@ -27,8 +31,14 @@ function OnboardingContent() {
   const errorParam = searchParams.get("error");
   const stepParam = searchParams.get("step");
 
-  const { sheetId, sheetUrl: storedSheetUrl, isConnected, setSheetConnection, hasSeenOnboarding, setTemplateVersion, setAuthStatus } =
-    useAppStore();
+  const {
+    sheetId,
+    sheetUrl: storedSheetUrl,
+    isConnected,
+    setSheetConnection,
+    setTemplateVersion,
+    setAuthStatus,
+  } = useAppStore();
   const [step, setStep] = useState<Step>("google");
   const [sheetUrl, setSheetUrl] = useState(() => {
     if (typeof window !== "undefined") {
@@ -41,12 +51,12 @@ function OnboardingContent() {
   });
   const [error, setError] = useState<string | null>(
     errorParam === "auth_failed"
-      ? "Tu sesion de Google ha caducado. Vuelve a iniciarla para continuar."
+      ? "Tu sesión de Google ha caducado. Vuelve a iniciarla para continuar."
       : errorParam === "auth_required"
-      ? "Necesitas iniciar sesion con Google para usar la app."
-      : null,
+        ? "Necesitas iniciar sesión con Google para usar la app."
+        : null,
   );
-  const [validating, setValidating] = useState(false);
+  const [showManualInput, setShowManualInput] = useState(false);
   const canUseGoogleOAuth = isGoogleAuthConfigured();
 
   useEffect(() => {
@@ -76,6 +86,64 @@ function OnboardingContent() {
     window.location.href = "/auth/google";
   }
 
+  async function handleAutoCreate() {
+    setError(null);
+    setStep("creating");
+
+    try {
+      const templateId = getTemplateSheetIdOrThrow();
+      const result = await copyTemplateToUserDrive(templateId);
+      const newSheetId = result.fileId;
+      const sheetUrl = `https://docs.google.com/spreadsheets/d/${newSheetId}/edit`;
+
+      setStep("validating");
+
+      const ESSENTIAL_SHEETS = [
+        SHEET_NAMES.CONFIG,
+        SHEET_NAMES.MOVIMIENTOS,
+        SHEET_NAMES.CATEGORIAS,
+        SHEET_NAMES.CUENTAS,
+      ];
+
+      const { valid, errors, warnings } = await validateSheetCompatibility(
+        newSheetId,
+        ESSENTIAL_SHEETS,
+      );
+
+      if (!valid) {
+        setError(
+          `La copia se creó pero la validación falló: ${errors.join("; ")}. ` +
+            "Puedes intentar conectar la hoja manualmente desde la opción inferior.",
+        );
+        setStep("sheet");
+        return;
+      }
+
+      if (warnings.length > 0) {
+        console.warn("Sheet compatibility warnings:", warnings);
+      }
+
+      try {
+        const config = await readConfig(newSheetId);
+        setTemplateVersion(
+          config["templateVersion"] ?? null,
+          config["appMinVersion"] ?? null,
+        );
+      } catch (e) {
+        console.warn("Could not read Config sheet:", (e as Error).message);
+      }
+
+      setSheetConnection(newSheetId, sheetUrl);
+      localStorage.setItem("last_sheet_url", sheetUrl);
+      setAuthStatus("authenticated");
+      setStep("done");
+      router.replace("/");
+    } catch (e) {
+      setError((e as Error).message);
+      setStep("sheet");
+    }
+  }
+
   async function handleSheetConnect() {
     if (!sheetUrl.trim()) {
       setError("Introduce una URL o ID de Google Sheet.");
@@ -100,19 +168,19 @@ function OnboardingContent() {
 
     if (!parsed) {
       setError(
-        "URL o ID no valido. Asegurate de copiar la URL completa o el ID.",
+        "URL o ID no válido. Asegúrate de copiar la URL completa o el ID.",
       );
       return;
     }
 
-    setValidating(true);
-    setStep("validating");
+    setShowManualInput(false);
     setError(null);
+    setStep("validating");
 
     try {
       const token = getToken();
       if (!token) {
-        setError("Sesion de Google caducada. Vuelve a iniciar sesion.");
+        setError("Sesión de Google caducada. Vuelve a iniciar sesión.");
         setStep("google");
         return;
       }
@@ -132,22 +200,31 @@ function OnboardingContent() {
       if (!valid) {
         const missingSheets = errors
           .filter((e) => e.includes("no encontrada"))
-          .map((e) => e.replace('no encontrada', 'no encontrada').replace('Hoja "', '').replace('"', ''))
+          .map((e) =>
+            e
+              .replace("no encontrada", "no encontrada")
+              .replace('Hoja "', "")
+              .replace('"', ""),
+          )
           .join(", ");
-        const missingCols = errors.filter((e) => e.includes("faltan columnas"));
-        const permissionErrors = errors.filter((e) => e.includes("Sin permisos"));
+        const missingCols = errors.filter((e) =>
+          e.includes("faltan columnas"),
+        );
+        const permissionErrors = errors.filter((e) =>
+          e.includes("Sin permisos"),
+        );
 
         if (permissionErrors.length > 0) {
           setError(
-            `Sin permisos de lectura. Comparte la hoja con tu cuenta de Google.`,
+            "Sin permisos de lectura. Asegúrate de haber iniciado sesión con la cuenta que tiene acceso a la hoja.",
           );
         } else if (missingSheets) {
           setError(
-            `Faltan hojas en tu Sheet: ${missingSheets}. Asegurate de usar la plantilla correcta.`,
+            `Faltan hojas en tu Sheet: ${missingSheets}. Asegúrate de usar la plantilla correcta.`,
           );
         } else if (missingCols.length > 0) {
           setError(
-            `Faltan columnas en tu Sheet:\n${missingCols.map((e) => `• ${e}`).join("\n")}\n\nDescarga la plantilla actualizada.`,
+            `Faltan columnas en tu Sheet:\n${missingCols.map((e) => `• ${e}`).join("\n")}\n\nDescarga la plantilla actualizada desde el enlace de ayuda.`,
           );
         } else {
           setError(`Problemas con la Sheet: ${errors.join("; ")}`);
@@ -184,23 +261,30 @@ function OnboardingContent() {
         ADVANCED_SHEETS,
       );
 
-      if (advancedValidation.warnings.length > 0 || !advancedValidation.valid) {
-        console.warn("Advanced features not fully available:", advancedValidation);
+      if (
+        advancedValidation.warnings.length > 0 ||
+        !advancedValidation.valid
+      ) {
+        console.warn(
+          "Advanced features not fully available:",
+          advancedValidation,
+        );
       }
 
       setSheetConnection(
         parsed,
         `https://docs.google.com/spreadsheets/d/${parsed}`,
       );
-      localStorage.setItem("last_sheet_url", `https://docs.google.com/spreadsheets/d/${parsed}`);
+      localStorage.setItem(
+        "last_sheet_url",
+        `https://docs.google.com/spreadsheets/d/${parsed}`,
+      );
       setAuthStatus("authenticated");
       setStep("done");
       router.replace("/");
     } catch (e) {
       setError(`Error al conectar con la Sheet: ${(e as Error).message}`);
       setStep("sheet");
-    } finally {
-      setValidating(false);
     }
   }
 
@@ -216,7 +300,7 @@ function OnboardingContent() {
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Tu Google Sheet esta conectada correctamente. Ya puedes usar la
+              Tu Google Sheet está conectada correctamente. Ya puedes usar la
               app.
             </p>
             <Button className="w-full" onClick={() => router.push("/")}>
@@ -233,10 +317,10 @@ function OnboardingContent() {
       <div className="w-full max-w-md space-y-6">
         <div className="text-center space-y-2">
           <h1 className="text-2xl font-bold tracking-tight">
-            Conectar Google Sheet
+            AppFinanciera
           </h1>
           <p className="text-sm text-muted-foreground">
-            Vincula tu copia de la plantilla de finanzas personales.
+            Controla tus finanzas personales desde tu Google Drive.
           </p>
         </div>
 
@@ -251,15 +335,19 @@ function OnboardingContent() {
           <Card>
             <CardHeader>
               <CardTitle className="text-base">
-                Paso 1: Iniciar sesion
+                Iniciar sesión
               </CardTitle>
               <CardDescription>
-                Accede con tu cuenta de Google para dar permisos a la app.
+                Accede con tu cuenta de Google para empezar.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {canUseGoogleOAuth ? (
-                <Button onClick={handleGoogleAuth} className="w-full" size="lg">
+                <Button
+                  onClick={handleGoogleAuth}
+                  className="w-full"
+                  size="lg"
+                >
                   <svg className="h-5 w-5 mr-2" viewBox="0 0 24 24">
                     <path
                       fill="#fff"
@@ -278,108 +366,169 @@ function OnboardingContent() {
                       d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
                     />
                   </svg>
-                  {hasToken() ? "Re-conectar sesion" : "Iniciar sesion con Google"}
+                  {hasToken()
+                    ? "Re-conectar sesión"
+                    : "Iniciar sesión con Google"}
                 </Button>
               ) : (
                 <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 text-sm">
                   <p className="font-medium text-yellow-800">
-                    Configuracion pendiente
+                    Configuración pendiente
                   </p>
                   <p className="mt-1 text-yellow-700">
                     La app no tiene NEXT_PUBLIC_GOOGLE_CLIENT_ID configurada.
-                    Añadela en Vercel para habilitar el acceso con Google.
+                    Añádela en Vercel para habilitar el acceso con Google.
                   </p>
                 </div>
               )}
-
-              <div className="rounded-lg border border-blue-100 bg-blue-50 p-4">
-                <p className="text-sm font-medium text-blue-900 mb-2">
-                  Descargar plantilla
-                </p>
-                <p className="text-xs text-blue-700 mb-3">
-                  Si es tu primera vez, descarga la plantilla de Google Sheets.
-                </p>
-                <a
-                  href="https://github.com/DavidColillaMartinez/AppFinanciera/raw/master/plantilla_base_finanzas_app.xlsx"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 font-medium"
-                >
-                  <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
-                  </svg>
-                  Descargar plantilla Excel
-                </a>
-              </div>
             </CardContent>
           </Card>
         )}
 
         {step === "sheet" && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">
-                Paso 2: Conectar tu Sheet
-              </CardTitle>
-              <CardDescription>
-                Copia la URL completa de tu Google Sheet y pegala aqui.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {storedSheetUrl && (
-                <div className="rounded-lg bg-muted p-3 text-xs text-muted-foreground">
-                  <p>Ultima Sheet conectada:</p>
-                  <p className="font-mono truncate mt-1">{storedSheetUrl}</p>
+          <div className="space-y-4">
+            <Card
+              className="cursor-pointer border-primary/30 hover:border-primary/60 transition-colors"
+              onClick={handleAutoCreate}
+            >
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Plus className="h-5 w-5 text-primary" />
+                  Crear mi hoja automáticamente
+                </CardTitle>
+                <CardDescription>
+                  Crearemos una copia privada de la plantilla oficial en tu
+                  Google Drive. La hoja será tuya y solo tú tendrás acceso.
+                </CardDescription>
+              </CardHeader>
+            </Card>
+
+            <div className="text-center">
+              <button
+                onClick={() => setShowManualInput(!showManualInput)}
+                className="text-sm text-muted-foreground hover:text-foreground underline underline-offset-4 transition-colors"
+              >
+                {showManualInput
+                  ? "Ocultar"
+                  : "Conectar una hoja existente"}
+              </button>
+            </div>
+
+            {showManualInput && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm">
+                    Conectar hoja existente
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {storedSheetUrl && (
+                    <div className="rounded-lg bg-muted p-3 text-xs text-muted-foreground">
+                      <p>Última hoja conectada:</p>
+                      <p className="font-mono truncate mt-1">
+                        {storedSheetUrl}
+                      </p>
+                      <Button
+                        size="sm"
+                        variant="link"
+                        className="h-auto p-0 mt-2"
+                        onClick={() => setSheetUrl(storedSheetUrl)}
+                      >
+                        Reutilizar
+                      </Button>
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                    <Label htmlFor="sheet-url">URL o ID de la hoja</Label>
+                    <Input
+                      id="sheet-url"
+                      placeholder="https://docs.google.com/spreadsheets/d/..."
+                      value={sheetUrl}
+                      onChange={(e) => {
+                        setSheetUrl(e.target.value);
+                        setError(null);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleSheetConnect();
+                      }}
+                    />
+                  </div>
+
                   <Button
-                    size="sm"
-                    variant="link"
-                    className="h-auto p-0 mt-2"
-                    onClick={() => setSheetUrl(storedSheetUrl)}
+                    onClick={handleSheetConnect}
+                    className="w-full"
+                    variant="outline"
                   >
-                    Reutilizar
+                    Conectar
                   </Button>
-                </div>
-              )}
+                </CardContent>
+              </Card>
+            )}
 
-              <div className="rounded-lg bg-muted p-4 text-sm">
-                <p className="font-medium mb-2">Como conseguir la URL:</p>
-                <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
-                  <li>Abre tu copia de la plantilla en Google Sheets.</li>
-                  <li>Copia la URL desde la barra del navegador.</li>
-                  <li>Pegala abajo.</li>
-                </ol>
-              </div>
+            <div className="rounded-lg border p-3 text-sm text-muted-foreground space-y-1">
+              <p className="font-medium text-foreground text-xs">
+                Privacidad
+              </p>
+              <p className="text-xs">
+                No necesitas hacer pública tu hoja. La app accede mediante tu
+                cuenta de Google y los permisos que aceptes. La copia se crea
+                en tu Drive y será tuya.
+              </p>
+            </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="sheet-url">URL o ID de la hoja</Label>
-                <Input
-                  id="sheet-url"
-                  placeholder="https://docs.google.com/spreadsheets/d/..."
-                  value={sheetUrl}
-                  onChange={(e) => {
-                    setSheetUrl(e.target.value);
-                    setError(null);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") handleSheetConnect();
-                  }}
-                />
-              </div>
-
-              <div className="flex gap-3">
-                <Button onClick={handleSheetConnect} className="flex-1">
-                  Conectar
-                </Button>
-                <Button
-                  onClick={() => {
-                    setStep("google");
-                    if (!getToken()) router.push("/onboarding");
-                  }}
-                  variant="outline"
+            <details className="group">
+              <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground text-center list-none">
+                <span className="group-open:hidden">
+                  ¿Problemas? Más opciones
+                </span>
+                <span className="hidden group-open:inline">
+                  Ocultar ayuda
+                </span>
+              </summary>
+              <div className="mt-3 space-y-2 text-xs text-muted-foreground">
+                <p>
+                  Si usas el Excel manualmente, súbelo a Drive y conviértelo a
+                  Google Sheets antes de conectarlo.
+                </p>
+                <a
+                  href="https://github.com/DavidColillaMartinez/AppFinanciera/raw/master/plantilla_base_finanzas_app.xlsx"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-primary hover:text-primary/80 font-medium"
                 >
-                  Atras
-                </Button>
+                  <svg
+                    className="h-3.5 w-3.5"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
+                  </svg>
+                  Descargar plantilla Excel
+                </a>
               </div>
+            </details>
+
+            <div className="text-center">
+              <button
+                onClick={() => setStep("google")}
+                className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-4 transition-colors"
+              >
+                Volver a inicio de sesión
+              </button>
+            </div>
+          </div>
+        )}
+
+        {step === "creating" && (
+          <Card>
+            <CardContent className="py-12 text-center space-y-4">
+              <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+              <p className="text-muted-foreground">
+                Creando copia de la plantilla en tu Drive...
+              </p>
             </CardContent>
           </Card>
         )}
@@ -387,19 +536,11 @@ function OnboardingContent() {
         {step === "validating" && (
           <Card>
             <CardContent className="py-12 text-center space-y-4">
-              <div className="text-4xl">🔍</div>
-              <p className="text-muted-foreground">Validando tu Sheet...</p>
+              <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+              <p className="text-muted-foreground">Validando tu hoja...</p>
             </CardContent>
           </Card>
         )}
-
-        <div className="rounded-lg border p-4 text-sm text-muted-foreground">
-          <p className="font-medium text-foreground">Seguridad</p>
-          <p className="mt-1">
-            Tu informacion nunca sale de tu cuenta de Google. La app solo tiene
-            permisos de lectura y escritura en la hoja que conectes.
-          </p>
-        </div>
       </div>
     </div>
   );

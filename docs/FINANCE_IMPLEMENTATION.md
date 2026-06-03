@@ -558,6 +558,70 @@ live in `docs/FINANCE_AUDIT.md`.
 
 ---
 
+## Phase 12.X — Professional Google Drive template creation flow — `implemented`
+
+- **Purpose**: Automate the onboarding Sheet creation via Drive API so users
+  do not need to download an Excel template or make their Sheet public.
+- **OAuth scope added**:
+  - `https://www.googleapis.com/auth/drive.file` — requested alongside
+    existing `spreadsheets`, `userinfo.email`, `userinfo.profile` scopes.
+  - Existing tokens without the Drive scope cause a clear 403 error on
+    copy; the user is guided to reconnect Google to grant the new scope.
+  - `prompt=consent` ensures the consent screen always appears so the user
+    can approve the new scope.
+- **Main files**:
+  - `src/lib/google/drive.ts` — new. `copyTemplateToUserDrive(templateFileId)`
+    calls `POST /drive/v3/files/{templateFileId}/copy` with a descriptive
+    name (`AppFinanciera - Mis finanzas - YYYY-MM-DD`). Returns fileId, name
+    and webViewLink. Error handling for 403 (scope/permission), 404 (missing
+    template), 429 (quota) and generic failures.
+  - `src/lib/google/auth.ts` — updated `GOOGLE_SCOPES` array to include
+    `drive.file`.
+  - `src/lib/google/index.ts` — re-exports the new drive module.
+  - `src/app/onboarding/page.tsx` — redesigned step flow:
+    - Step 1 ("google"): Google login as the primary action. Excel download
+      removed from this step.
+    - Step 2 ("sheet"): "Crear mi hoja automáticamente" as the primary
+      card, "Conectar una hoja existente" as a toggleable manual input,
+      privacy explanation, and Excel download as a secondary fallback
+      under a `<details>` accordion.
+  - `.env.example` — new file with `NEXT_PUBLIC_TEMPLATE_SPREADSHEET_ID`.
+  - `docs/FINANCE_LOGIC.md` — §0 updated to mention the official template
+    ID, Drive copy flow, and `drive.file` scope.
+- **Template env var**:
+  - `NEXT_PUBLIC_TEMPLATE_SPREADSHEET_ID` — required for the auto-create
+    flow. Default fallback: `1NQk-eJkPgE46V1sbe0KQ67_ZkUcfvdv-RXN99r-mZXc`.
+  - If missing, auto-create throws a clear error and the manual URL flow
+    still works.
+- **Privacy behavior**:
+  - The Drive copy is private to the user's account. The app never asks the
+    user to set "anyone with the link can edit".
+  - The copy is created in the authenticated user's Drive via `drive.file`
+    scope (per-file access only).
+  - Permission errors for manual Sheets show the account mismatch message
+    instead of asking to make the Sheet public.
+- **Manual URL fallback**:
+  - Still available via "Conectar una hoja existente".
+  - Works with private Sheets the user's account can access.
+  - Permission error shown for inaccessible Sheets without suggesting
+    public sharing.
+  - Excel download kept as `<details>` help for advanced users.
+- **Error handling**:
+  - Missing env var → clear error, manual URL still works.
+  - Old token without Drive scope → 403 from Drive API, clear error with
+    guidance to reconnect Google.
+  - Drive copy fails → error shown, user falls back to manual URL.
+  - User cancels Google consent → normal flow continues, user stays on
+    step 1.
+  - Quota/rate limit → 429 from Drive API, clear error.
+  - Copied Sheet validation fails → error shown with fallback suggestion.
+  - Manual Sheet permission error → 403 message without public-sharing
+    suggestion.
+  - Manual pasted file is not a native Google Sheet → validation fails
+    with a clear error (same behavior as before).
+
+---
+
 | Phase | Topic | Status |
 |-------|-------|--------|
 | 3 | Template / schema / validation | implemented |
@@ -573,3 +637,4 @@ live in `docs/FINANCE_AUDIT.md`.
 | 12 | Emergency functional repair + mobile responsive sweep | implemented |
 | 12.1.1 | Fix failed core flow repairs with real acceptance tests | implemented |
 | 12.1.2 | Final core flow fixes: Disponible detail, salary detection, delete fix | implemented |
+| 12.X | Professional Google Drive template creation flow | implemented |
