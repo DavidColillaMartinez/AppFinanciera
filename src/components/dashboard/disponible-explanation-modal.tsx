@@ -19,9 +19,14 @@ import {
   Receipt,
   PiggyBank,
   Clock,
+  Banknote,
+  Wallet,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { AvailableBalanceBreakdown } from "@/lib/finance/finance-engine";
+import type { AccountRow } from "@/types/models";
+import type { AccountBalanceBreakdown } from "@/lib/finance/account-balances";
+import { AccountRole } from "@/constants/enums";
 import Link from "next/link";
 
 interface DisponibleExplanationModalProps {
@@ -33,6 +38,23 @@ interface DisponibleExplanationModalProps {
   salaryConfigured: boolean;
   salaryType?: "fixed" | "variable";
   variableSalarySaved?: boolean;
+  accounts?: AccountRow[];
+  accountBalances?: Map<string, AccountBalanceBreakdown>;
+  accountTotalMoney?: number;
+}
+
+function getRoleLabel(rol: string): string {
+  switch (rol) {
+    case AccountRole.DIARIO: return "Diario";
+    case AccountRole.FIJOS: return "Fijos";
+    case AccountRole.AHORRO: return "Ahorro";
+    case AccountRole.GENERAL: return "General";
+    default: return rol;
+  }
+}
+
+function isSpendableAccount(rol: string): boolean {
+  return rol === AccountRole.DIARIO || rol === AccountRole.GENERAL;
 }
 
 const TYPE_ICONS = {
@@ -68,6 +90,9 @@ export function DisponibleExplanationModal({
   salaryConfigured,
   salaryType,
   variableSalarySaved,
+  accounts = [],
+  accountBalances,
+  accountTotalMoney = 0,
 }: DisponibleExplanationModalProps) {
   const hasData =
     available.income > 0 ||
@@ -133,6 +158,61 @@ export function DisponibleExplanationModal({
             </p>
           </CardContent>
         </Card>
+
+        {accounts.length > 0 && (
+          <Card className="border border-border/60">
+            <CardContent className="p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Banknote className="h-4 w-4 text-muted-foreground" />
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Dinero en cuentas
+                  </p>
+                </div>
+                <p className="text-lg font-bold tabular-nums">
+                  {accountTotalMoney.toFixed(2)} €
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                {accounts.map((a) => {
+                  const balance = accountBalances?.get(a.cuentaId);
+                  const roleLabel = getRoleLabel(a.rol);
+                  const spendable = isSpendableAccount(a.rol);
+                  return (
+                    <div
+                      key={a.cuentaId}
+                      className="flex items-center justify-between text-xs"
+                    >
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <span className="truncate font-medium">{a.nombre}</span>
+                        <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                          {roleLabel}
+                        </span>
+                        {!spendable && (
+                          <span className="shrink-0 text-[10px] text-amber-600">
+                            No gastable
+                          </span>
+                        )}
+                      </div>
+                      <span className="font-mono font-medium tabular-nums shrink-0 ml-2">
+                        {balance ? balance.calculado.toFixed(2) : "0.00"} €
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="flex items-start gap-2 rounded-lg bg-muted/50 p-2">
+                <Wallet className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                <p className="text-[11px] text-muted-foreground">
+                  El Disponible ({"+"}{available.available.toFixed(2)} €) es lo que
+                  puedes gastar segun el plan del mes. El <strong>Dinero en
+                  cuentas</strong> es tu saldo real total. Las cuentas de ahorro y
+                  fijos no se consideran gastables desde el Disponible.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {!salaryConfigured && (
           <div className="flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/10 p-3 text-xs">

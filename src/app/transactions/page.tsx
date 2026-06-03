@@ -18,6 +18,8 @@ import { useAppStore } from "@/stores/app-store";
 import { EmptyState } from "@/components/states/empty-state";
 import { LoadingState } from "@/components/states/loading-state";
 import { ErrorState } from "@/components/states/error-state";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { useToast } from "@/components/ui/toast";
 import {
   Plus,
   Pencil,
@@ -56,6 +58,7 @@ function TransactionsContent() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedType, setSelectedType] = useState<TransactionType | null>(null);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [selectedMonth, setSelectedMonth] = useState<string>(
     new Date().toISOString().slice(0, 7),
   );
@@ -94,6 +97,7 @@ function TransactionsContent() {
   const { data: categories } = useCategories(sheetId);
   const { data: accounts } = useAccounts(sheetId);
   const deleteTransaction = useDeleteTransaction(sheetId);
+  const { success, error: showError } = useToast();
 
   function clearQueryFilters() {
     const params = new URLSearchParams(searchParams.toString());
@@ -188,11 +192,13 @@ function TransactionsContent() {
     : null;
 
   async function handleDelete(id: string) {
-    if (!confirm("¿Borrar este movimiento?")) return;
     try {
       await deleteTransaction.mutateAsync(id);
+      success("Movimiento eliminado correctamente.");
     } catch (e) {
-      console.error("Error deleting:", e);
+      const message =
+        e instanceof Error ? e.message : "Error al eliminar el movimiento.";
+      showError(message);
     }
   }
 
@@ -454,7 +460,7 @@ function TransactionsContent() {
                       <Pencil className="h-4 w-4 text-muted-foreground" />
                     </button>
                     <button
-                      onClick={() => handleDelete(t.id)}
+                      onClick={() => setPendingDeleteId(t.id)}
                       className="p-1.5 rounded-md hover:bg-muted transition-colors"
                     >
                       <Trash2 className="h-4 w-4 text-destructive" />
@@ -481,6 +487,24 @@ function TransactionsContent() {
           ))}
         </div>
       )}
+
+      <ConfirmDialog
+        open={pendingDeleteId !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingDeleteId(null);
+        }}
+        title="Borrar movimiento"
+        description="¿Estas seguro de que quieres eliminar este movimiento? Esta accion no se puede deshacer."
+        confirmLabel="Borrar"
+        cancelLabel="Cancelar"
+        destructive
+        onConfirm={async () => {
+          if (!pendingDeleteId) return;
+          const id = pendingDeleteId;
+          setPendingDeleteId(null);
+          await handleDelete(id);
+        }}
+      />
 
       <Dialog open={showForm} onOpenChange={setShowForm}>
         <DialogContent className="sm:max-w-md">

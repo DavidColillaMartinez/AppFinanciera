@@ -531,7 +531,32 @@ live in `docs/FINANCE_AUDIT.md`.
 
 ---
 
-## Status snapshot
+## Phase 12.1.2 — Final core flow fixes — `implemented`
+
+- **Purpose**: Fix the last remaining core-flow issues after Phase 12.1.1.
+- **Main files**:
+  - `src/components/dashboard/disponible-explanation-modal.tsx` — Added
+    `accounts`, `accountBalances`, `accountTotalMoney` props. Shows account
+    money breakdown (per-account name, role, calculated balance, spendability)
+    inside the Disponible detail modal. Explains difference between "Disponible"
+    (month plan) and "Dinero en cuentas" (real total balance).
+  - `src/app/page.tsx` — Removed the separate "Dinero en cuentas" dashboard
+    card (now inside the modal). `SavingsPlanWidget` redesigned with 4 states:
+    (1) no config, (2) disabled, (3) variable missing month amount, (4)
+    movement exists. Salary detection uses `salaryMovementExists` (checks
+    `TX-SALARY-YYYY-MM`) and `salaryIncome` from engine. Shows destination
+    account name. `DisponibleExplanationModal` receives account data.
+  - `src/app/transactions/page.tsx` — Replaced `window.confirm` with
+    `ConfirmDialog` component. Added `useToast` for success/error feedback.
+    Delete button opens confirmed dialog; success shows toast; errors show
+    toast message instead of silent `console.error`.
+- **Key conventions**:
+  - Account money lives inside Disponible detail modal, not as a separate widget.
+  - SavingsPlanWidget uses 4 deterministic states based on salary config
+    existence, enabled flag, and actual movement presence.
+  - Deletion uses the existing `ConfirmDialog` + `useToast` pattern.
+
+---
 
 | Phase | Topic | Status |
 |-------|-------|--------|
@@ -547,3 +572,4 @@ live in `docs/FINANCE_AUDIT.md`.
 | 11 | UI / design polish | implemented |
 | 12 | Emergency functional repair + mobile responsive sweep | implemented |
 | 12.1.1 | Fix failed core flow repairs with real acceptance tests | implemented |
+| 12.1.2 | Final core flow fixes: Disponible detail, salary detection, delete fix | implemented |

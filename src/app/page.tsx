@@ -20,7 +20,7 @@ import {
   Target,
   CalendarCheck,
   AlertTriangle,
-  Banknote,
+
 } from "lucide-react";
 import {
   Dialog,
@@ -197,6 +197,22 @@ export default function VistaMesPage() {
   const isVariableSalaryConfigured = Boolean(
     salaryConfig && salaryConfig.enabled && salaryConfig.type === "variable",
   );
+  const salaryEnabled = salaryConfig?.enabled ?? false;
+  const salaryMovementIdStr = useMemo(
+    () => buildSalaryMovementId(selectedMonth),
+    [selectedMonth],
+  );
+  const salaryMovement = useMemo(
+    () => (transactions ?? []).find((t) => t.id === salaryMovementIdStr && !t.deletedAt),
+    [transactions, salaryMovementIdStr],
+  );
+  const salaryMovementExists = !!salaryMovement;
+  const salaryIncome = summary.available.salaryIncome;
+  const salaryAccountName = useMemo(() => {
+    const targetId = salaryMovement?.cuentaDestino || salaryConfig?.destinationAccount;
+    if (!targetId) return null;
+    return accounts?.find((a) => a.cuentaId === targetId)?.nombre ?? targetId;
+  }, [salaryMovement, salaryConfig, accounts]);
 
   useEffect(() => {
     if (!sheetId || !salaryConfig) return;
@@ -533,33 +549,6 @@ export default function VistaMesPage() {
         />
       </div>
 
-      {accounts && accounts.length > 0 && (
-        <Card className="overflow-hidden animate-fade-in" style={{ animationDelay: "260ms" }}>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <Banknote className="h-4 w-4 text-muted-foreground" />
-                <h2 className="text-sm font-semibold">Dinero en cuentas</h2>
-              </div>
-              <p className="text-lg font-bold">{summary.accountTotalMoney.toFixed(2)} €</p>
-            </div>
-            <div className="space-y-1.5">
-              {accounts.map((a) => {
-                const balance = summary.accountBalances.get(a.cuentaId);
-                return (
-                  <div key={a.cuentaId} className="flex items-center justify-between text-xs">
-                    <span className="text-muted-foreground truncate">{a.nombre}</span>
-                    <span className="font-medium">
-                      {balance ? balance.calculado.toFixed(2) : "0.00"} €
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
       {hasChart && (
         <Card
           className="overflow-hidden animate-fade-in"
@@ -596,9 +585,14 @@ export default function VistaMesPage() {
       {isVisible("savingsPlan") && (
         <SavingsPlanWidget
           monthName={monthName}
-          monthlyIncome={salaryConfig?.fixedAmount ?? 0}
-          incomeType={salaryConfig?.type ?? "fixed"}
-          salaryConfigured={isSalaryConfigured}
+          salaryEnabled={salaryEnabled}
+          salaryType={salaryConfig?.type ?? "fixed"}
+          salaryFixedAmount={salaryConfig?.fixedAmount ?? 0}
+          salaryMovementExists={salaryMovementExists}
+          salaryIncome={salaryIncome}
+          salaryAccountName={salaryAccountName}
+          salaryDay={salaryConfig?.day ?? 1}
+          hasConfig={!!salaryConfig?.updatedAt}
         />
       )}
 
@@ -760,6 +754,9 @@ export default function VistaMesPage() {
         salaryConfigured={isSalaryConfigured || isVariableSalaryConfigured}
         salaryType={salaryConfig?.type}
         variableSalarySaved={isVariableSalaryConfigured}
+        accounts={accounts ?? []}
+        accountBalances={summary.accountBalances}
+        accountTotalMoney={summary.accountTotalMoney}
       />
 
       <GeneralSavingsBreakdownModal
@@ -788,20 +785,28 @@ export default function VistaMesPage() {
 
 interface SavingsPlanWidgetProps {
   monthName: string;
-  monthlyIncome: number;
-  incomeType: "fixed" | "variable";
-  salaryConfigured: boolean;
+  salaryEnabled: boolean;
+  salaryType: "fixed" | "variable";
+  salaryFixedAmount: number;
+  salaryMovementExists: boolean;
+  salaryIncome: number;
+  salaryAccountName: string | null;
+  salaryDay: number;
+  hasConfig: boolean;
 }
 
 function SavingsPlanWidget({
   monthName,
-  monthlyIncome,
-  incomeType,
-  salaryConfigured,
+  salaryEnabled,
+  salaryType,
+  salaryFixedAmount,
+  salaryMovementExists,
+  salaryIncome,
+  salaryAccountName,
+  salaryDay,
+  hasConfig,
 }: SavingsPlanWidgetProps) {
-  if (!salaryConfigured) {
-    const isVariableWithoutAmount =
-      incomeType === "variable" && monthlyIncome === 0;
+  if (!hasConfig) {
     return (
       <Card
         className="overflow-hidden animate-fade-in border-amber-200 bg-amber-50/50"
@@ -812,31 +817,105 @@ function SavingsPlanWidget({
             <Target className="h-4 w-4 text-primary" />
             <h2 className="text-sm font-semibold">Plan personalizado</h2>
           </div>
-          {isVariableWithoutAmount ? (
-            <>
-              <p className="text-xs text-muted-foreground mb-3">
-                Tu nomina variable esta configurada, pero falta introducir el
-                importe de {monthName}.
-              </p>
-              <Button asChild size="sm" variant="outline" className="w-full">
-                <a href="/more/salary">Introducir importe del mes</a>
-              </Button>
-            </>
-          ) : (
-            <>
-              <p className="text-xs text-muted-foreground mb-3">
-                Configura tu nomina para ver un plan de ahorro basado en tus ingresos.
-              </p>
-              <Button asChild size="sm" variant="outline" className="w-full">
-                <a href="/more/salary">Configurar nomina</a>
-              </Button>
-            </>
-          )}
+          <p className="text-xs text-muted-foreground mb-3">
+            Configura tu nomina para ver un plan de ahorro basado en tus ingresos.
+          </p>
+          <Button asChild size="sm" variant="outline" className="w-full">
+            <a href="/more/salary">Configurar nomina</a>
+          </Button>
         </CardContent>
       </Card>
     );
   }
 
+  if (!salaryEnabled) {
+    return (
+      <Card
+        className="overflow-hidden animate-fade-in border-amber-200 bg-amber-50/50"
+        style={{ animationDelay: "320ms" }}
+      >
+        <CardContent className="p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Target className="h-4 w-4 text-muted-foreground" />
+            <h2 className="text-sm font-semibold">Plan personalizado</h2>
+          </div>
+          <p className="text-xs text-muted-foreground mb-3">
+            Tu nomina esta desactivada. Si quieres usar un plan de ahorro
+            personalizado, activala desde Ajustes &gt; Nomina.
+          </p>
+          <Button asChild size="sm" variant="outline" className="w-full">
+            <a href="/more/salary">Activar nomina</a>
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (salaryType === "variable" && !salaryMovementExists) {
+    return (
+      <Card
+        className="overflow-hidden animate-fade-in border-amber-200 bg-amber-50/50"
+        style={{ animationDelay: "320ms" }}
+      >
+        <CardContent className="p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Target className="h-4 w-4 text-primary" />
+            <h2 className="text-sm font-semibold">Plan personalizado</h2>
+          </div>
+          <p className="text-xs text-muted-foreground mb-3">
+            Tu nomina variable esta configurada, pero falta introducir el
+            importe de {monthName}.
+          </p>
+          <Button asChild size="sm" variant="outline" className="w-full">
+            <a href="/more/salary">Introducir importe del mes</a>
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!salaryMovementExists) {
+    const displayAmount = salaryFixedAmount;
+    return (
+      <Card
+        className="overflow-hidden animate-fade-in border-blue-200 bg-blue-50/50"
+        style={{ animationDelay: "320ms" }}
+      >
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-semibold flex items-center gap-2">
+              <Target className="h-4 w-4 text-primary" />
+              Plan de ahorro del mes
+            </h2>
+            <span className="text-xs px-2 py-1 rounded-full bg-income/20 text-income font-medium">
+              {salaryType === "fixed" ? "Fija" : "Variable"}
+            </span>
+          </div>
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Tu nomina</span>
+              <span className="font-medium">{displayAmount.toFixed(2)} €</span>
+            </div>
+            <div className="rounded-lg bg-amber-100/70 p-2 text-xs text-amber-900 flex items-start gap-1.5">
+              <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+              <span>
+                La nomina de {monthName} aun no se ha ingresado
+                {salaryType === "fixed"
+                  ? `. Se ingresara automaticamente el dia ${salaryDay}.`
+                  : "."}
+              </span>
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground mt-3">
+            Toca el card &quot;Disponible&quot; arriba para ver el desglose completo
+            de {monthName}.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const displayAmount = salaryIncome > 0 ? salaryIncome : salaryFixedAmount;
   return (
     <Card
       className="overflow-hidden animate-fade-in border-blue-200 bg-blue-50/50"
@@ -849,28 +928,32 @@ function SavingsPlanWidget({
             Plan de ahorro del mes
           </h2>
           <span className="text-xs px-2 py-1 rounded-full bg-income/20 text-income font-medium">
-            {incomeType === "fixed" ? "Fija" : "Variable"}
+            {salaryType === "fixed" ? "Fija" : "Variable"}
           </span>
         </div>
         <div className="space-y-2 text-sm">
           <div className="flex justify-between">
             <span className="text-muted-foreground">Tu nomina</span>
-            <span className="font-medium">{monthlyIncome.toFixed(2)} €</span>
+            <span className="font-medium">{displayAmount.toFixed(2)} €</span>
           </div>
-          <p className="text-xs text-muted-foreground">
-            Toca el card &quot;Disponible&quot; arriba para ver el desglose completo
-            de {monthName}.
-          </p>
-          {salaryConfigured && (
-            <div className="rounded-lg bg-blue-100/70 p-2 text-xs text-blue-900 flex items-start gap-1.5">
-              <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-              <span>
-                El Disponible ya descuenta los fijos confirmados/pendientes y
-                las provisiones de pagos futuros.
-              </span>
+          {salaryAccountName && (
+            <div className="flex justify-between text-xs">
+              <span className="text-muted-foreground">Cuenta de destino</span>
+              <span className="font-medium">{salaryAccountName}</span>
             </div>
           )}
+          <div className="rounded-lg bg-green-100/70 p-2 text-xs text-green-900 flex items-start gap-1.5">
+            <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+            <span>
+              Nomina de {monthName} ya ingresada
+              {salaryIncome > 0 ? ` (${salaryIncome.toFixed(2)} €)` : ""}.
+            </span>
+          </div>
         </div>
+        <p className="text-xs text-muted-foreground mt-3">
+          Toca el card &quot;Disponible&quot; arriba para ver el desglose completo
+          de {monthName}.
+        </p>
       </CardContent>
     </Card>
   );
