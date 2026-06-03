@@ -20,6 +20,7 @@ export type CategoryInput = z.infer<typeof categorySchema>;
 
 export const categoryCreateSchema = categorySchema.omit({
   categoriaId: true,
+  activo: true,
   createdAt: true,
   updatedAt: true,
 });

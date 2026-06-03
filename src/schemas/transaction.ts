@@ -34,7 +34,9 @@ export const transactionCreateSchema = transactionSchema
     deletedAt: true,
     mesClave: true,
   })
-  .partial({ concepto: true })
+  .extend({
+    concepto: z.string().max(200).optional().default(""),
+  })
   .superRefine((data, ctx) => {
     if (data.tipo === TransactionType.INGRESO) {
       if (!data.cuentaDestino || data.cuentaDestino.length === 0) {
@@ -102,6 +104,7 @@ export const transactionUpdateSchema = transactionSchema
   })
   .extend({
     categoria: z.string().max(100).optional(),
+    concepto: z.string().max(200).optional().default(""),
   })
   .superRefine((data, ctx) => {
     if (data.tipo === TransactionType.INGRESO) {

@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TransactionType, CategoryType } from "@/constants/enums";
-import { PAYMENT_METHOD_OPTIONS, PaymentMethod } from "@/constants/payment-methods";
+import { PAYMENT_METHOD_OPTIONS, PaymentMethod, DEFAULT_PAYMENT_METHOD } from "@/constants/payment-methods";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -24,7 +24,7 @@ import { useToast } from "@/components/ui/toast";
 import { FormField } from "@/components/forms/form-field";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
-import { AlertCircle, PiggyBank } from "lucide-react";
+import { AlertCircle, PiggyBank, ArrowLeftRight } from "lucide-react";
 
 const transactionTypes = [
   { value: TransactionType.INGRESO, label: "Ingreso" },
@@ -63,18 +63,27 @@ export function TransactionForm({
   const updateTransaction = useUpdateTransaction(sheetId);
 
   const defaultValues: TransactionCreateInput = initialData && isEditing
-    ? {
-        fecha: initialData.fecha,
-        concepto: initialData.concepto,
-        tipo: initialData.tipo,
-        categoria: initialData.categoria,
-        importe: initialData.importe,
-        metodo: initialData.metodo || "",
-        cuentaOrigen: initialData.cuentaOrigen,
-        cuentaDestino: initialData.cuentaDestino,
-        notas: initialData.notas,
-        reservaId: initialData.reservaId,
-      }
+    ? (() => {
+        const ori = initialData;
+        const matchCuentaOrigen = accounts.find(
+          (a) => a.cuentaId === ori.cuentaOrigen || a.nombre === ori.cuentaOrigen,
+        );
+        const matchCuentaDestino = accounts.find(
+          (a) => a.cuentaId === ori.cuentaDestino || a.nombre === ori.cuentaDestino,
+        );
+        return {
+          fecha: ori.fecha,
+          concepto: ori.concepto,
+          tipo: ori.tipo,
+          categoria: ori.categoria,
+          importe: ori.importe,
+          metodo: ori.metodo || DEFAULT_PAYMENT_METHOD,
+          cuentaOrigen: matchCuentaOrigen?.cuentaId ?? ori.cuentaOrigen,
+          cuentaDestino: matchCuentaDestino?.cuentaId ?? ori.cuentaDestino,
+          notas: ori.notas,
+          reservaId: ori.reservaId,
+        };
+      })()
     : {
         fecha: new Date().toISOString().split("T")[0],
         concepto: "",
@@ -83,7 +92,7 @@ export function TransactionForm({
           : (defaultType ?? TransactionType.GASTO),
         categoria: "",
         importe: 0,
-        metodo: "",
+        metodo: DEFAULT_PAYMENT_METHOD,
         cuentaOrigen: "",
         cuentaDestino: "",
         notas: "",
@@ -139,7 +148,7 @@ export function TransactionForm({
   const accountOptions = [
     { value: "", label: accounts.length === 0 ? "Sin cuentas" : "Selecciona cuenta" },
     ...accounts.map((a) => ({
-      value: a.nombre,
+      value: a.cuentaId,
       label: `${a.nombre} (${a.tipo})`,
     })),
   ];
@@ -231,11 +240,10 @@ export function TransactionForm({
                   });
                   if (e.target.value === TransactionType.INGRESO) {
                     setValue("metodo", "");
-                  }
-                  if (e.target.value === TransactionType.TRANSFERENCIA_INTERNA) {
+                  } else if (e.target.value === TransactionType.TRANSFERENCIA_INTERNA) {
                     setValue("metodo", PaymentMethod.TRANSFERENCIA);
                   } else {
-                    setValue("metodo", "");
+                    setValue("metodo", DEFAULT_PAYMENT_METHOD);
                   }
                   setValue("cuentaOrigen", "");
                   setValue("cuentaDestino", "");
@@ -272,7 +280,7 @@ export function TransactionForm({
             </div>
           )}
 
-          <FormField label="Concepto" htmlFor="concepto" error={errors.concepto} required>
+          <FormField label="Concepto" htmlFor="concepto" error={errors.concepto}>
             <Input
               id="concepto"
               placeholder="Descripcion del movimiento"
@@ -384,6 +392,16 @@ export function TransactionForm({
                 : "grid-cols-1",
             )}
           >
+            {isTransfer && (
+              <div className="col-span-full rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-800 flex items-start gap-2">
+                <ArrowLeftRight className="h-4 w-4 mt-0.5 shrink-0" />
+                <span>
+                  La transferencia interna mueve dinero entre tus cuentas. No afecta
+                  a tus ingresos ni gastos del mes. Para enviar dinero a otra persona,
+                  usa un Gasto con metodo Transferencia.
+                </span>
+              </div>
+            )}
             {showCuentaOrigen && (
               <FormField
                 label={isTransfer ? "Cuenta origen" : "Cuenta origen"}

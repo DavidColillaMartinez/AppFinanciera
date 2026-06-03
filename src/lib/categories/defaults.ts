@@ -203,6 +203,16 @@ export const DEFAULT_CATEGORIES: DefaultCategory[] = [
     color: "#065F46",
     icono: "calendar",
   },
+
+  // TRANSFERENCIA
+  {
+    nombre: "Transferencia interna",
+    tipoHabitual: "Gasto",
+    presupuestoMensual: 0,
+    grupo: "Movimientos",
+    color: "#6B7280",
+    icono: "arrow-left-right",
+  },
 ];
 
 export function buildCategoryRow(cat: DefaultCategory): Omit<CategoryRow, "categoriaId" | "createdAt" | "updatedAt"> {

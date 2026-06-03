@@ -467,6 +467,68 @@ live in `docs/FINANCE_AUDIT.md`.
   - Transaction mutations only invalidate accounts (for balance update)
     and transactions. They do not cascade to reserves/goals/savingsLedger.
 
+## Phase 12.1.1 — Fix failed core flow repairs with real acceptance tests — `implemented`
+
+- **Purpose**: fix bugs that remained broken or partially fixed after Phase 12.1.
+  Real iPhone 13 testing showed auth loops, category creation failing silently,
+  concept still required, default payment method not working, account balance
+  not updating because selectors stored names instead of IDs, fixed expense
+  confirmed amounts not reflected in dashboard, recent movements not sorted,
+  and no account money display.
+- **Main files**:
+  - `src/app/onboarding/page.tsx` — `useEffect` step priority fixed: error params
+    (`error=auth_failed`, `error=auth_required`) now take precedence over persisted
+    `isConnected && sheetId`. A stale Sheet no longer overrides a missing token.
+  - `src/stores/app-store.ts` — `onRehydrateStorage` no longer sets `authStatus`
+    to `"authenticated"` based on `sheetId` alone. Defaults to `"unknown"`.
+  - `src/schemas/category.ts` — `categoryCreateSchema` omits `activo` (form does
+    not include it; mutationFn defaults to `"S"`).
+  - `src/lib/categories/defaults.ts` — added `Transferencia interna` default
+    category with tipoHabitual `Gasto`.
+  - `src/schemas/transaction.ts` — `concepto` changed from `.partial()` to
+    `.extend({ concepto: z.string().max(200).optional().default("") })` in both
+    `transactionCreateSchema` and `transactionUpdateSchema`. Empty string
+    accepted and defaulted.
+  - `src/features/transactions/components/transaction-form.tsx` — default
+    `metodo` changed from `""` to `DEFAULT_PAYMENT_METHOD` (Tarjeta). `tipo`
+    `onChange` handler now sets `DEFAULT_PAYMENT_METHOD` when switching to
+    `GASTO` (was resetting to `""`). Account selector options changed from
+    `value: a.nombre` to `value: a.cuentaId`. Editing default values map
+    stored account names to IDs for backward compatibility. Concept field no
+    longer shows `required` indicator. Transfer helper text added.
+  - `src/constants/payment-methods.ts` — `normalizePaymentMethod` returns
+    `DEFAULT_PAYMENT_METHOD` for empty input (no functional change, already
+    done in Phase 12.1).
+  - `src/lib/finance/account-balances.ts` — `matchesAccount()` helper added;
+    `computeAccountBalance` now checks both `cuentaId` and account `nombre`
+    for backward compatibility with old rows storing names.
+  - `src/lib/finance/finance-engine.ts` — `getFixedExpensesConfirmed` now
+    looks for the actual `TX-FIJO-` movement in `ctx.transactions` and uses
+    the movement's `importe` (not the template's `importe`). Added
+    `accountTotalMoney` and `accountBalances` to `DashboardFinanceSummary`.
+    `getDashboardSummary` computes account balances.
+  - `src/app/page.tsx` — recent movements sorted by `fecha` descending (then
+    `createdAt`). Fallback label when `concepto` is empty. New "Dinero en
+    cuentas" card showing total and per-account balances. `SavingsPlanWidget`
+    handles variable salary without monthly amount (shows "falta introducir
+    importe" instead of generic "configura nomina").
+  - `src/app/transactions/page.tsx` — account filter options use `cuentaId`
+    as value. Filter logic matches both ID and name for backward
+    compatibility. Account display uses `getAccountName()` helper to resolve
+    IDs to names. Concept fallback label.
+- **Key conventions**:
+  - Account selectors store `cuentaId` in `Movimientos.cuentaOrigen` /
+    `cuentaDestino`. Old rows storing account names are matched by fallback
+    in `matchesAccount()`.
+  - Concept is optional for all transaction types. Empty string is defaulted
+    by schema, written as empty string to the Sheet.
+  - Fixed expense confirmed amount = real movement `importe` from `TX-FIJO-`
+    row. Template `importe` is fallback if movement is missing (edge case).
+  - Dashboard shows both "Disponible este mes" (plan-based, monthly flow) and
+    "Dinero en cuentas" (accumulated balances from all accounts).
+  - Onboarding step priority: error params > token state > step param >
+    persisted sheet connection.
+
 ---
 
 ## Status snapshot
@@ -484,3 +546,4 @@ live in `docs/FINANCE_AUDIT.md`.
 | 10 | Google session and Sheet connection recovery | implemented |
 | 11 | UI / design polish | implemented |
 | 12 | Emergency functional repair + mobile responsive sweep | implemented |
+| 12.1.1 | Fix failed core flow repairs with real acceptance tests | implemented |

@@ -330,7 +330,7 @@ export const useAppStore = create<AppState & AppActions>()(
             state.dashboardConfig = { ...state.dashboardConfig, charts: defaults.charts };
           }
           if (!state.authStatus) {
-            state.authStatus = state.sheetId ? "authenticated" : "missing";
+            state.authStatus = "unknown";
           }
         }
       },

@@ -16,6 +16,11 @@ function safeNumber(value: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+function matchesAccount(value: string | undefined, account: AccountRow): boolean {
+  if (!value) return false;
+  return value === account.cuentaId || value === account.nombre;
+}
+
 export function computeAccountBalance(
   account: AccountRow,
   transactions: ReadonlyArray<TransactionRow>,
@@ -31,7 +36,7 @@ export function computeAccountBalance(
   for (const tx of transactions) {
     if (!tx || tx.deletedAt) continue;
 
-    if (tx.cuentaDestino === cuentaId && tx.cuentaDestino !== "") {
+    if (matchesAccount(tx.cuentaDestino, account)) {
       if (tx.tipo === TransactionType.INGRESO) {
         ingresos += safeNumber(tx.importe);
       } else if (tx.tipo === TransactionType.TRANSFERENCIA_INTERNA) {
@@ -39,7 +44,7 @@ export function computeAccountBalance(
       }
     }
 
-    if (tx.cuentaOrigen === cuentaId && tx.cuentaOrigen !== "") {
+    if (matchesAccount(tx.cuentaOrigen, account)) {
       if (tx.tipo === TransactionType.GASTO) {
         gastos += safeNumber(tx.importe);
       } else if (tx.tipo === TransactionType.TRANSFERENCIA_INTERNA) {

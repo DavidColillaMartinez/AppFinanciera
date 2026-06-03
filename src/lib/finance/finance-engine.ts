@@ -12,6 +12,7 @@ import type {
 import { TipoDestinoReserva, TipoMovimientoReserva, TransactionType } from "@/constants/enums";
 import { SALARY_MOVEMENT_ID_PREFIX } from "./salary-config";
 import { LEDGER_ID_PREFIX, getActiveMovements } from "./savings-ledger";
+import { computeAllAccountBalances, type AccountBalanceBreakdown } from "./account-balances";
 
 export type MonthKey = string;
 
@@ -125,6 +126,8 @@ export interface DashboardFinanceSummary {
   futurePaymentProvisions: number;
   plannedSavings: number;
   executedSavings: number;
+  accountTotalMoney: number;
+  accountBalances: Map<string, AccountBalanceBreakdown>;
 }
 
 const SALARY_ID_PREFIXES = [SALARY_MOVEMENT_ID_PREFIX, "SALARY-"] as const;
@@ -250,10 +253,17 @@ export function getVariableExpenses(ctx: FinanceContext): number {
 export function getFixedExpensesConfirmed(ctx: FinanceContext): number {
   const confirmed = ctx.confirmedFixedExpenseIds ?? new Set<string>();
   if (confirmed.size === 0) return 0;
-  return ctx.fixedExpenses
-    .filter((f) => f.activo === "S")
-    .filter((f) => confirmed.has(f.fijoId))
-    .reduce((sum, f) => sum + f.importe, 0);
+  let total = 0;
+  for (const fijo of ctx.fixedExpenses) {
+    if (fijo.activo !== "S") continue;
+    if (!confirmed.has(fijo.fijoId)) continue;
+    const movementId = `${FIXED_CONFIRMED_ID_PREFIX}${ctx.monthKey}-${fijo.fijoId}`;
+    const movement = ctx.transactions.find(
+      (t) => t.id === movementId && !t.deletedAt,
+    );
+    total += movement ? movement.importe : fijo.importe;
+  }
+  return total;
 }
 
 export function getFixedExpensesPending(ctx: FinanceContext): number {
@@ -695,6 +705,11 @@ export function getDashboardSummary(
   const savings = getGeneralSavings(ctx);
   const monthlySavings = getMonthlySavings(ctx);
   const savingsBreakdown = getSavingsBreakdown(ctx);
+  const accountBalances = computeAllAccountBalances(ctx.accounts, ctx.transactions);
+  const accountTotalMoney = Array.from(accountBalances.values()).reduce(
+    (sum, b) => sum + b.calculado,
+    0,
+  );
 
   return {
     available,
@@ -713,6 +728,8 @@ export function getDashboardSummary(
     futurePaymentProvisions: available.futurePaymentProvisions,
     plannedSavings: available.plannedSavings,
     executedSavings: available.executedSavings,
+    accountTotalMoney,
+    accountBalances,
   };
 }
 

@@ -51,20 +51,24 @@ function OnboardingContent() {
 
   useEffect(() => {
     const token = getToken();
-    if (isConnected && sheetId) {
-      setStep("done");
-      return;
-    }
-    if (errorParam === "auth_failed") {
+    if (errorParam === "auth_failed" || errorParam === "auth_required") {
       setStep("google");
       return;
     }
     if (stepParam === "sheet" && token) {
       setStep("sheet");
-    } else if (stepParam === "sheet" && !token) {
+      return;
+    }
+    if (stepParam === "sheet" && !token) {
       setStep("google");
-    } else if (!token) {
+      return;
+    }
+    if (!token) {
       setStep("google");
+      return;
+    }
+    if (isConnected && sheetId) {
+      setStep("done");
     }
   }, [isConnected, sheetId, stepParam, errorParam]);
 

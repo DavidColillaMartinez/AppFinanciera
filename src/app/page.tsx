@@ -20,6 +20,7 @@ import {
   Target,
   CalendarCheck,
   AlertTriangle,
+  Banknote,
 } from "lucide-react";
 import {
   Dialog,
@@ -295,7 +296,14 @@ export default function VistaMesPage() {
   );
 
   const recentTransactions = useMemo(() => {
-    return (transactions ?? []).slice(0, 5);
+    return (transactions ?? [])
+      .slice()
+      .sort((a, b) => {
+        const dateCmp = b.fecha.localeCompare(a.fecha);
+        if (dateCmp !== 0) return dateCmp;
+        return (b.createdAt || "").localeCompare(a.createdAt || "");
+      })
+      .slice(0, 5);
   }, [transactions]);
 
   const savingsBreakdownHasAny = useMemo(
@@ -525,6 +533,33 @@ export default function VistaMesPage() {
         />
       </div>
 
+      {accounts && accounts.length > 0 && (
+        <Card className="overflow-hidden animate-fade-in" style={{ animationDelay: "260ms" }}>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Banknote className="h-4 w-4 text-muted-foreground" />
+                <h2 className="text-sm font-semibold">Dinero en cuentas</h2>
+              </div>
+              <p className="text-lg font-bold">{summary.accountTotalMoney.toFixed(2)} €</p>
+            </div>
+            <div className="space-y-1.5">
+              {accounts.map((a) => {
+                const balance = summary.accountBalances.get(a.cuentaId);
+                return (
+                  <div key={a.cuentaId} className="flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground truncate">{a.nombre}</span>
+                    <span className="font-medium">
+                      {balance ? balance.calculado.toFixed(2) : "0.00"} €
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {hasChart && (
         <Card
           className="overflow-hidden animate-fade-in"
@@ -604,7 +639,9 @@ export default function VistaMesPage() {
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm truncate">{t.concepto}</p>
+                      <p className="font-medium text-sm truncate">
+                        {t.concepto || t.tipo === "Ingreso" ? "Ingreso" : t.tipo === "Gasto" ? "Gasto" : t.tipo === "Transferencia interna" ? "Transferencia interna" : t.tipo}
+                      </p>
                       <p className="text-xs text-muted-foreground">
                         {t.categoria} · {t.fecha}
                       </p>
@@ -763,9 +800,11 @@ function SavingsPlanWidget({
   salaryConfigured,
 }: SavingsPlanWidgetProps) {
   if (!salaryConfigured) {
+    const isVariableWithoutAmount =
+      incomeType === "variable" && monthlyIncome === 0;
     return (
       <Card
-        className="overflow-hidden animate-fade-in border-blue-200 bg-blue-50/50"
+        className="overflow-hidden animate-fade-in border-amber-200 bg-amber-50/50"
         style={{ animationDelay: "320ms" }}
       >
         <CardContent className="p-4">
@@ -773,12 +812,26 @@ function SavingsPlanWidget({
             <Target className="h-4 w-4 text-primary" />
             <h2 className="text-sm font-semibold">Plan personalizado</h2>
           </div>
-          <p className="text-xs text-muted-foreground mb-3">
-            Configura tu nomina para ver un plan de ahorro basado en tus ingresos.
-          </p>
-          <Button asChild size="sm" variant="outline" className="w-full">
-            <a href="/more/salary">Configurar nomina</a>
-          </Button>
+          {isVariableWithoutAmount ? (
+            <>
+              <p className="text-xs text-muted-foreground mb-3">
+                Tu nomina variable esta configurada, pero falta introducir el
+                importe de {monthName}.
+              </p>
+              <Button asChild size="sm" variant="outline" className="w-full">
+                <a href="/more/salary">Introducir importe del mes</a>
+              </Button>
+            </>
+          ) : (
+            <>
+              <p className="text-xs text-muted-foreground mb-3">
+                Configura tu nomina para ver un plan de ahorro basado en tus ingresos.
+              </p>
+              <Button asChild size="sm" variant="outline" className="w-full">
+                <a href="/more/salary">Configurar nomina</a>
+              </Button>
+            </>
+          )}
         </CardContent>
       </Card>
     );

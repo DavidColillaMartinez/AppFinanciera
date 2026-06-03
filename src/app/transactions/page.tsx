@@ -110,9 +110,17 @@ function TransactionsContent() {
     ...(categories ?? []).map((c) => ({ value: c.nombre, label: c.nombre })),
   ];
 
+  function getAccountName(value: string): string {
+    if (!value) return "";
+    const account = accounts?.find(
+      (a) => a.cuentaId === value || a.nombre === value,
+    );
+    return account?.nombre ?? value;
+  }
+
   const accountOptions = [
     { value: "", label: "Todas" },
-    ...(accounts ?? []).map((a) => ({ value: a.nombre, label: a.nombre })),
+    ...(accounts ?? []).map((a) => ({ value: a.cuentaId, label: a.nombre })),
   ];
 
   const filtered = useMemo(() => {
@@ -127,20 +135,27 @@ function TransactionsContent() {
     if (filterAccount) {
       result = result.filter(
         (t) =>
-          t.cuentaOrigen === filterAccount || t.cuentaDestino === filterAccount,
+          t.cuentaOrigen === filterAccount ||
+          t.cuentaDestino === filterAccount ||
+          accounts?.some(
+            (a) =>
+              a.cuentaId === filterAccount &&
+              (t.cuentaOrigen === a.nombre ||
+                t.cuentaDestino === a.nombre),
+          ),
       );
     }
     if (search) {
       const q = search.toLowerCase();
       result = result.filter(
         (t) =>
-          t.concepto.toLowerCase().includes(q) ||
+          (t.concepto || "").toLowerCase().includes(q) ||
           t.notas.toLowerCase().includes(q),
       );
     }
 
     return result;
-  }, [transactions, filterType, filterCategory, filterAccount, search]);
+  }, [transactions, filterType, filterCategory, filterAccount, search, accounts]);
 
   const income = useMemo(
     () =>
@@ -398,7 +413,7 @@ function TransactionsContent() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-medium text-sm truncate">
-                          {t.concepto}
+                          {t.concepto || (t.tipo === "Ingreso" ? "Ingreso" : t.tipo === "Gasto" ? "Gasto" : t.tipo === "Transferencia interna" ? "Transferencia" : t.tipo)}
                         </span>
                         <Badge
                           variant={
@@ -422,7 +437,8 @@ function TransactionsContent() {
                       <p className="text-xs text-muted-foreground mt-1">
                         {t.fecha}
                         {t.categoria && ` · ${t.categoria}`}
-                        {t.cuentaOrigen && ` · ${t.cuentaOrigen}`}
+                        {t.cuentaOrigen && ` · ${getAccountName(t.cuentaOrigen)}`}
+                        {t.cuentaDestino && ` → ${getAccountName(t.cuentaDestino)}`}
                       </p>
                     </div>
                   </div>
