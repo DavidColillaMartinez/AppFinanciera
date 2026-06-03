@@ -8,10 +8,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useCreateGoal, useUpdateGoal } from "../hooks/use-goals";
 import type { GoalRow } from "@/types/models";
 import { GoalType, Priority, GenericStatus } from "@/constants/enums";
+import { SavingsDifficultyBadge, DifficultyTag, estimateRequiredMonthly } from "@/components/savings/difficulty-badge";
+import { useFinanceSummary } from "@/hooks/use-finance-summary";
+import { Clock, CalendarDays } from "lucide-react";
 
 const goalCreateSchema = z.object({
   nombre: z.string().min(1, "El nombre es obligatorio"),
@@ -24,8 +27,10 @@ const goalCreateSchema = z.object({
     GoalType.OTRO,
   ]),
   importeObjetivo: z.number().min(0, "El importe debe ser positivo"),
+  fechaInicio: z.string().optional(),
   fechaObjetivo: z.string().optional(),
   prioridad: z.enum([Priority.ALTA, Priority.MEDIA, Priority.BAJA]).optional(),
+  estado: z.enum([GenericStatus.ACTIVO, GenericStatus.PAUSADO, GenericStatus.COMPLETADO, GenericStatus.CANCELADO]).optional(),
   cuentaAhorro: z.string().optional(),
   notas: z.string().optional(),
 });
@@ -47,11 +52,18 @@ const priorities = [
   { value: Priority.BAJA, label: "Baja" },
 ];
 
+const estadoOptions = [
+  { value: GenericStatus.ACTIVO, label: "Activo" },
+  { value: GenericStatus.PAUSADO, label: "Pausado" },
+  { value: GenericStatus.COMPLETADO, label: "Completado" },
+];
+
 interface GoalFormProps {
   sheetId: string | null;
   initialData?: GoalRow;
   onSuccess?: () => void;
   onCancel?: () => void;
+  availableCapacity?: number;
 }
 
 export function GoalForm({
@@ -59,11 +71,21 @@ export function GoalForm({
   initialData,
   onSuccess,
   onCancel,
+  availableCapacity: externalCapacity,
 }: GoalFormProps) {
   const isEditing = !!initialData;
   const [isSubmitting, setIsSubmitting] = useState(false);
   const createGoal = useCreateGoal(sheetId);
   const updateGoal = useUpdateGoal(sheetId);
+  const { summary } = useFinanceSummary({});
+  const today = useMemo(() => new Date().toISOString().split("T")[0], []);
+
+  const capacidadAhorro = useMemo(() => {
+    if (externalCapacity !== undefined) return externalCapacity;
+    const a = summary.available;
+    const obligaciones = a.variableExpenses + a.fixedExpensesConfirmed + a.fixedExpensesPending + a.deferredPayments + a.futurePaymentProvisions;
+    return Math.max(0, a.income - obligaciones);
+  }, [summary, externalCapacity]);
 
   const {
     register,
@@ -79,8 +101,10 @@ export function GoalForm({
           nombre: initialData.nombre,
           tipo: initialData.tipo,
           importeObjetivo: initialData.importeObjetivo,
+          fechaInicio: initialData.fechaInicio,
           fechaObjetivo: initialData.fechaObjetivo,
           prioridad: initialData.prioridad,
+          estado: initialData.estado,
           cuentaAhorro: initialData.cuentaAhorro,
           notas: initialData.notas,
         }
@@ -88,12 +112,34 @@ export function GoalForm({
           nombre: "",
           tipo: GoalType.VACACIONES,
           importeObjetivo: 0,
+          fechaInicio: today,
           fechaObjetivo: "",
           prioridad: Priority.MEDIA,
+          estado: GenericStatus.ACTIVO,
           cuentaAhorro: "",
           notas: "",
         },
   });
+
+  const importeObjetivoVal = watch("importeObjetivo");
+  const fechaObjetivoVal = watch("fechaObjetivo");
+  const fechaInicioVal = watch("fechaInicio");
+
+  const requiredMonthly = useMemo(
+    () => estimateRequiredMonthly(importeObjetivoVal, 0, fechaObjetivoVal ?? ""),
+    [importeObjetivoVal, fechaObjetivoVal],
+  );
+
+  const monthsRemaining = useMemo(() => {
+    if (!fechaObjetivoVal) return 0;
+    const now = new Date();
+    const target = new Date(fechaObjetivoVal as string);
+    return Math.max(0, (target.getFullYear() - now.getFullYear()) * 12 + target.getMonth() - now.getMonth());
+  }, [fechaObjetivoVal]);
+
+  const futureStart = Boolean(
+    fechaInicioVal && fechaInicioVal.slice(0, 7) > today.slice(0, 7),
+  );
 
   async function onSubmit(data: GoalCreateInput) {
     setIsSubmitting(true);
@@ -163,6 +209,28 @@ export function GoalForm({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-2">
+              <Label htmlFor="estado">Estado</Label>
+              <Select
+                id="estado"
+                options={estadoOptions}
+                value={watch("estado") ?? GenericStatus.ACTIVO}
+                onChange={(e) =>
+                  setValue("estado", e.target.value as GoalCreateInput["estado"])
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="fechaInicio">Fecha inicio</Label>
+              <Input
+                id="fechaInicio"
+                type="date"
+                {...register("fechaInicio")}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-2">
               <Label htmlFor="importeObjetivo">Importe objetivo</Label>
               <Input
                 id="importeObjetivo"
@@ -187,6 +255,47 @@ export function GoalForm({
               />
             </div>
           </div>
+
+          {fechaObjetivoVal && monthsRemaining > 0 && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground rounded-lg bg-muted/50 p-2">
+              <Clock className="h-3.5 w-3.5 shrink-0" />
+              <span>
+                {monthsRemaining} mes{monthsRemaining !== 1 ? "es" : ""} restante
+                {monthsRemaining !== 1 ? "s" : ""}.
+                {requiredMonthly > 0 && (
+                  <> Aporte necesario: <strong>{requiredMonthly.toFixed(2)} €/mes</strong>.</>
+                )}
+                {requiredMonthly > 0 && capacidadAhorro > 0 && (
+                  <> <DifficultyTag requiredMonthly={requiredMonthly} availableCapacity={capacidadAhorro} /></>
+                )}
+              </span>
+            </div>
+          )}
+
+          {!fechaObjetivoVal && importeObjetivoVal > 0 && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground rounded-lg bg-muted/50 p-2">
+              <Clock className="h-3.5 w-3.5 shrink-0" />
+              <span>
+                Sin fecha objetivo. La app usara prioridad y capacidad disponible para sugerir el aporte mensual.
+              </span>
+            </div>
+          )}
+
+          {requiredMonthly > 0 && capacidadAhorro > 0 && (
+            <SavingsDifficultyBadge
+              requiredMonthly={requiredMonthly}
+              availableCapacity={capacidadAhorro}
+            />
+          )}
+
+          {futureStart && (
+            <div className="flex items-center gap-2 text-xs text-amber-700 rounded-lg bg-amber-50 border border-amber-200 p-2">
+              <CalendarDays className="h-3.5 w-3.5 shrink-0" />
+              <span>
+                Este objetivo comienza en {fechaInicioVal}. No se incluira en el plan mensual hasta entonces.
+              </span>
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="cuentaAhorro">Cuenta de ahorro</Label>
