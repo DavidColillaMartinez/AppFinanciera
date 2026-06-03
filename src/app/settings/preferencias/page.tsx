@@ -1,51 +1,85 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useAppStore } from "@/stores/app-store";
 import { clearToken, getToken } from "@/lib/sheets/client";
 import { useRouter } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   FileSpreadsheet,
   RefreshCw,
   Unlink,
   Link as LinkIcon,
   LogOut,
+  Loader2,
 } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 export default function PreferenciasPage() {
-  const { sheetId, sheetUrl, isConnected, disconnect, logoutGoogle, lastConnectedAt, templateVersion } = useAppStore();
+  const {
+    sheetId,
+    sheetUrl,
+    isConnected,
+    disconnect,
+    logoutGoogle,
+    lastConnectedAt,
+    templateVersion,
+  } = useAppStore();
   const router = useRouter();
   const { success } = useToast();
+  const queryClient = useQueryClient();
+
+  const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   function handleChangeSheet() {
     disconnect();
-    localStorage.removeItem("last_sheet_url");
-    if (getToken()) {
-      router.push("/onboarding?step=sheet");
-    } else {
-      router.push("/onboarding?error=auth_required");
-    }
+    router.push("/onboarding?step=sheet");
   }
 
   function handleDisconnectSheet() {
-    if (confirm("¿Desconectar la Sheet? La sesion de Google se mantiene. Podras conectar otra hoja sin volver a iniciar sesion.")) {
-      disconnect();
-      localStorage.removeItem("last_sheet_url");
-      router.push("/onboarding?step=sheet");
-      success("Sheet desconectada. Sesion de Google mantenida.");
-    }
+    setShowDisconnectConfirm(true);
   }
 
-  function handleDisconnectGoogle() {
-    if (confirm("¿Cerrar sesion de Google? Se desconectara tambien la Sheet actual y tendras que volver a iniciar sesion.")) {
-      clearToken();
-      localStorage.removeItem("last_sheet_url");
-      logoutGoogle();
-      window.location.href = "/onboarding";
+  function onConfirmDisconnect() {
+    disconnect();
+    localStorage.removeItem("last_sheet_url");
+    router.push("/onboarding?step=sheet");
+    success("Sheet desconectada. Sesión de Google mantenida.");
+  }
+
+  async function handleLogout() {
+    setShowLogoutConfirm(true);
+  }
+
+  async function onConfirmLogout() {
+    setLoggingOut(true);
+
+    const token = getToken();
+
+    if (token) {
+      try {
+        await fetch(
+          `https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(token)}`,
+          { method: "POST" },
+        );
+      } catch {
+        // Revoke failure is acceptable — clear local state regardless
+      }
     }
+
+    clearToken();
+    logoutGoogle();
+    queryClient.clear();
+
+    success("Sesión de Google cerrada.");
+
+    window.location.href = "/onboarding";
   }
 
   return (
@@ -62,7 +96,7 @@ export default function PreferenciasPage() {
 
       <div className="space-y-4">
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-          Conexion
+          Conexión
         </h2>
 
         {isConnected && sheetId && (
@@ -77,8 +111,14 @@ export default function PreferenciasPage() {
                   <p className="text-xs text-muted-foreground truncate">
                     {sheetId}
                   </p>
+                  {sheetUrl && (
+                    <p className="text-xs text-muted-foreground truncate mt-1">
+                      {sheetUrl}
+                    </p>
+                  )}
                 </div>
               </div>
+
               {sheetUrl && (
                 <a
                   href={sheetUrl}
@@ -100,7 +140,7 @@ export default function PreferenciasPage() {
               )}
               {templateVersion && (
                 <p className="text-xs text-muted-foreground">
-                  Version de plantilla: {templateVersion}
+                  Versión de plantilla: {templateVersion}
                 </p>
               )}
 
@@ -126,21 +166,26 @@ export default function PreferenciasPage() {
               </div>
 
               <p className="text-xs text-muted-foreground">
-                Cambiar o desconectar la Sheet no cierra tu sesion de Google.
+                Cambiar o desconectar la Sheet no cierra tu sesión de Google.
               </p>
 
               <Button
                 variant="destructive"
                 size="sm"
                 className="w-full gap-2"
-                onClick={handleDisconnectGoogle}
+                onClick={handleLogout}
+                disabled={loggingOut}
               >
-                <LogOut className="h-4 w-4" />
-                Cerrar sesion de Google
+                {loggingOut ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <LogOut className="h-4 w-4" />
+                )}
+                {loggingOut ? "Cerrando sesión..." : "Cerrar sesión de Google"}
               </Button>
 
               <p className="text-xs text-muted-foreground">
-                Al cerrar sesion de Google tambien se desconecta la Sheet actual.
+                Al cerrar sesión de Google también se desconecta la Sheet actual.
               </p>
             </CardContent>
           </Card>
@@ -154,7 +199,7 @@ export default function PreferenciasPage() {
                   <Unlink className="h-5 w-5 text-expense" />
                 </div>
                 <div className="flex-1">
-                  <p className="font-medium text-sm">Sin conexion</p>
+                  <p className="font-medium text-sm">Sin conexión</p>
                   <p className="text-xs text-muted-foreground">
                     Conecta tu Google Sheet
                   </p>
@@ -180,13 +225,13 @@ export default function PreferenciasPage() {
 
       <div className="space-y-4">
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-          Informacion
+          Información
         </h2>
 
         <Card>
           <CardContent className="p-4 space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-sm">Version de la app</span>
+              <span className="text-sm">Versión de la app</span>
               <span className="text-sm font-medium">1.1.1</span>
             </div>
             <div className="flex items-center justify-between">
@@ -196,6 +241,26 @@ export default function PreferenciasPage() {
           </CardContent>
         </Card>
       </div>
+
+      <ConfirmDialog
+        open={showDisconnectConfirm}
+        onOpenChange={setShowDisconnectConfirm}
+        title="Desconectar Sheet"
+        description="La sesión de Google se mantiene. Podrás conectar otra hoja sin volver a iniciar sesión."
+        confirmLabel="Desconectar"
+        destructive={false}
+        onConfirm={onConfirmDisconnect}
+      />
+
+      <ConfirmDialog
+        open={showLogoutConfirm}
+        onOpenChange={setShowLogoutConfirm}
+        title="Cerrar sesión de Google"
+        description="Se desconectará también la Sheet actual y tendrás que volver a iniciar sesión."
+        confirmLabel="Cerrar sesión"
+        destructive={true}
+        onConfirm={onConfirmLogout}
+      />
     </div>
   );
 }

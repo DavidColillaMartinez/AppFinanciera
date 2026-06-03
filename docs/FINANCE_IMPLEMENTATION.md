@@ -531,7 +531,42 @@ live in `docs/FINANCE_AUDIT.md`.
 
 ---
 
-## Phase 12.3 — Advanced savings planning — `implemented`
+## Phase 12.3.1 — Savings planning UI polish — `implemented`
+
+- **Purpose**: Integrate `computeSavingsDifficulty` into forms, improve date UX,
+  add priority/estado badges, improve /savings page, add summary to dashboard
+  modals.
+- **Main files**:
+  - `src/components/savings/difficulty-badge.tsx` — New shared component.
+    `SavingsDifficultyBadge` shows color-coded difficulty with explanation
+    (OK/verde, Ajustado/amber, Difícil/naranja, Inviable/rojo).
+    `DifficultyTag` is an inline pill variant.
+    `estimateRequiredMonthly` computes required monthly from target amount,
+    saved amount and target date.
+  - `src/features/goals/components/goal-form.tsx` — Added `useFinanceSummary`
+    for `capacidadAhorro`. Defaults `fechaInicio` to today. Shows months
+    remaining, required monthly, difficulty badge, future-start warning.
+  - `src/features/reserves/components/reserve-form.tsx` — Same difficulty/date
+    UX as goal form. Defaults `fechaInicio` to today.
+  - `src/features/future-payments/components/future-payment-form.tsx` — Same
+    difficulty/date UX. Defaults `fechaInicio` to today.
+  - `src/app/savings/page.tsx` — Added summary banner (active/paused/completed
+    counts). Estado badge on each reserve card (non-active). Added
+    `capacidadAhorro` via `useFinanceSummary`.
+  - `src/components/dashboard/general-savings-breakdown-modal.tsx` — Added
+    priority count badges (Alta/Media/Baja) and pausado count. Added warning
+    banner when difficult/inviable targets exist.
+- **Key conventions**:
+  - `estimateRequiredMonthly` uses `(target - saved) / monthsRemaining`.
+    Returns 0 when no target date is set.
+  - Forms pass `fechaObjetivo ?? ""` to `estimateRequiredMonthly` because
+    `watch()` returns `string | undefined`.
+  - Difficulty badge returns null when either requiredMonthly or
+    availableCapacity is 0, so forms work without financial data.
+  - Priority-based proportional allocation is documented as pending
+    (not implemented due to risk of breaking existing allocation).
+
+---
 
 - **Purpose**: Add estado/priority/date fields to savings targets, rename salary
   widget, clean up forms, add direct savings quick action.
@@ -671,6 +706,40 @@ live in `docs/FINANCE_AUDIT.md`.
 
 ---
 
+## Phase 12.X.1 — Fix Google logout + persist auto-created Sheet URL — `implemented`
+
+- **Purpose**: Make the "Cerrar sesión de Google" button a real action with
+  proper state clearing, Google revoke call, React Query cache reset, and
+  loading/success feedback. Ensure auto-created Sheets are persisted and
+  rememberable like manually connected ones.
+- **Main files**:
+  - `src/app/settings/preferencias/page.tsx` — Replaced `window.confirm`
+    with `ConfirmDialog` for both disconnect and logout. Added:
+    - Loading state (`loggingOut`) while logout runs.
+    - Google revoke call (`POST /oauth2.googleapis.com/revoke`) — fire-and-forget.
+    - React Query cache clear via `queryClient.clear()`.
+    - Toast notification on successful logout.
+    - Disabled button while logging out (shows spinner).
+    - "Cambiar Sheet" no longer removes `localStorage.last_sheet_url`
+      so the previous URL is available for reconnection.
+    - Sheet URL now shown inline in the connection card.
+- **Behavior changes**:
+  - Logout now: revokes token at Google → clears sessionStorage → clears
+    Zustand state → clears React Query cache → redirects to `/onboarding`.
+    Revoke failure does not block local logout.
+  - Change Sheet: keeps `last_sheet_url` in localStorage so onboarding
+    shows "Última hoja conectada" with "Reutilizar" button.
+  - Logout: no longer removes `last_sheet_url` so re-login can reconnect
+    the previous Sheet without re-pasting the URL.
+  - Auto-created Sheet URL was already persisted via `setSheetConnection`
+    + `localStorage.setItem("last_sheet_url", ...)`. No code change needed.
+- **Stale connected-state prevention**: Already correct in `client-layout.tsx`
+  — persisted `isConnected` alone does not imply auth. Missing token always
+  shows Google login. Logout cannot leave stale `isConnected=true` because
+  `logoutGoogle()` sets `isConnected=false` synchronously before redirect.
+
+---
+
 | Phase | Topic | Status |
 |-------|-------|--------|
 | 3 | Template / schema / validation | implemented |
@@ -687,4 +756,6 @@ live in `docs/FINANCE_AUDIT.md`.
 | 12.1.1 | Fix failed core flow repairs with real acceptance tests | implemented |
 | 12.1.2 | Final core flow fixes: Disponible detail, salary detection, delete fix | implemented |
 | 12.3 | Advanced savings planning: estado/priority/dates, widget rename, forms | implemented |
-| 12.X | Professional Google Drive template creation flow | implemented |
+| 12.3.1 | Savings planning UI polish: difficulty badge, date UX, priority display | implemented |
+| 12.X | Professional Google Sheet creation flow (revised: programmatic creation) | implemented |
+| 12.X.1 | Fix Google logout + persist auto-created Sheet URL | implemented |
