@@ -7,9 +7,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { useAppStore } from "@/stores/app-store";
-import { useReserves, useDeleteReserve } from "@/features/reserves/hooks/use-reserves";
-import { useGoals, useDeleteGoal } from "@/features/goals/hooks/use-goals";
-import { useFuturePayments, useDeleteFuturePayment } from "@/features/future-payments/hooks/use-future-payments";
+import { useFinanceSummary } from "@/hooks/use-finance-summary";
+import { useReserves, useDeleteReserve, useUpdateReserve } from "@/features/reserves/hooks/use-reserves";
+import { useGoals, useDeleteGoal, useUpdateGoal } from "@/features/goals/hooks/use-goals";
+import { useFuturePayments, useDeleteFuturePayment, useUpdateFuturePayment } from "@/features/future-payments/hooks/use-future-payments";
 import { useDeferredPayments, useDeleteDeferredPayment } from "@/features/deferred-payments/hooks/use-deferred-payments";
 import { useFixedExpenses, useDeleteFixedExpense } from "@/features/fixed-expenses/hooks/use-fixed-expenses";
 import { useTargetBalances } from "@/features/savings/hooks/use-savings";
@@ -23,7 +24,8 @@ import { DeferredPaymentForm } from "@/features/deferred-payments/components/def
 import { FixedExpenseForm } from "@/features/fixed-expenses/components/fixed-expense-form";
 import { ReserveMovements } from "@/features/reserve-movements/components/reserve-movements-list";
 import { SavingsMovementForm } from "@/features/savings/components/savings-movement-form";
-import { Pencil, Trash2, Plus, History, ArrowDownLeft, CalendarCheck } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Pencil, Trash2, Plus, History, ArrowDownLeft, CalendarCheck, Pause, Play } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -96,10 +98,49 @@ export default function SavingsPage() {
   const deleteFuture = useDeleteFuturePayment(sheetId);
   const deleteDeferred = useDeleteDeferredPayment(sheetId);
   const deleteFixed = useDeleteFixedExpense(sheetId);
+  const updateReserve = useUpdateReserve(sheetId);
+  const updateGoal = useUpdateGoal(sheetId);
+  const updateFuture = useUpdateFuturePayment(sheetId);
 
-  const activeReserves = (reserves ?? []).filter((r) => r.activo === "S");
-  const activeGoals = (goals ?? []).filter((g) => g.estado === "Activo");
-  const activeFutures = (futures ?? []).filter((f) => f.activo === "S");
+  const activeReserves = (reserves ?? []).filter((r) => r.estado !== "Cancelado");
+  const activeGoals = (goals ?? []).filter((g) => g.estado !== "Cancelado");
+  const activeFutures = (futures ?? []).filter((f) => f.estado !== "Cancelado");
+
+  async function handleTogglePause(
+    type: "reserve" | "goal" | "future",
+    item: { estado: string; nombre: string; tipo?: string } & Record<string, any>,
+  ) {
+    const nuevoEstado = item.estado === "Activo" ? "Pausado" : "Activo";
+    try {
+      if (type === "reserve") {
+        await updateReserve.mutateAsync({
+          reservaId: item.reservaId,
+          nombre: item.nombre,
+          tipo: item.tipo ?? "Otro",
+          importeObjetivo: item.importeObjetivo ?? 0,
+          estado: nuevoEstado,
+        });
+      } else if (type === "goal") {
+        await updateGoal.mutateAsync({
+          objetivoId: item.objetivoId,
+          nombre: item.nombre,
+          tipo: item.tipo ?? "Otro",
+          importeObjetivo: item.importeObjetivo ?? 0,
+          estado: nuevoEstado,
+        });
+      } else {
+        await updateFuture.mutateAsync({
+          pagoId: item.pagoId,
+          concepto: item.concepto ?? item.nombre,
+          categoria: item.categoria ?? "",
+          importeObjetivo: item.importeObjetivo ?? 0,
+          estado: nuevoEstado,
+        });
+      }
+    } catch (e) {
+      console.error("Error toggling state:", e);
+    }
+  }
 
   const { data: balances } = useTargetBalances(sheetId, {
     reserves: activeReserves.map((r) => ({
@@ -204,6 +245,45 @@ export default function SavingsPage() {
         ))}
       </div>
 
+      <div className="grid grid-cols-3 gap-2">
+        <div className="rounded-lg bg-green-50 border border-green-200 p-2 text-center">
+          <p className="text-xs text-green-700 font-medium">Activos</p>
+          <p className="text-lg font-bold text-green-800">
+            {activeTab === "reservas"
+              ? (reserves ?? []).filter((r) => r.estado === "Activo").length
+              : activeTab === "objetivos"
+                ? (goals ?? []).filter((g) => g.estado === "Activo").length
+                : activeTab === "futuros"
+                  ? (futures ?? []).filter((f) => f.estado === "Activo").length
+                  : 0}
+          </p>
+        </div>
+        <div className="rounded-lg bg-amber-50 border border-amber-200 p-2 text-center">
+          <p className="text-xs text-amber-700 font-medium">Pausados</p>
+          <p className="text-lg font-bold text-amber-800">
+            {activeTab === "reservas"
+              ? (reserves ?? []).filter((r) => r.estado === "Pausado").length
+              : activeTab === "objetivos"
+                ? (goals ?? []).filter((g) => g.estado === "Pausado").length
+                : activeTab === "futuros"
+                  ? (futures ?? []).filter((f) => f.estado === "Pausado").length
+                  : 0}
+          </p>
+        </div>
+        <div className="rounded-lg bg-blue-50 border border-blue-200 p-2 text-center">
+          <p className="text-xs text-blue-700 font-medium">Completados</p>
+          <p className="text-lg font-bold text-blue-800">
+            {activeTab === "reservas"
+              ? (reserves ?? []).filter((r) => r.estado === "Completado").length
+              : activeTab === "objetivos"
+                ? (goals ?? []).filter((g) => g.estado === "Completado").length
+                : activeTab === "futuros"
+                  ? (futures ?? []).filter((f) => f.estado === "Completado").length
+                  : 0}
+          </p>
+        </div>
+      </div>
+
       {activeTab === "reservas" && (
         <>
           {loadingReserves && <LoadingState message="Cargando reservas..." />}
@@ -235,7 +315,24 @@ export default function SavingsPage() {
                             <p className="text-xs text-muted-foreground">{reserve.tipo}</p>
                           </div>
                           <div className="flex items-center gap-2">
+                            {reserve.estado !== "Activo" && (
+                              <span className={cn(
+                                "text-xs px-2 py-0.5 rounded-full font-medium",
+                                reserve.estado === "Pausado" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700",
+                              )}>
+                                {reserve.estado}
+                              </span>
+                            )}
                             <Badge variant="outline">{reserve.prioridad}</Badge>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              onClick={() => handleTogglePause("reserve", reserve as any)}
+                              title={reserve.estado === "Activo" ? "Pausar" : "Reactivar"}
+                            >
+                              {reserve.estado === "Activo" ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                            </Button>
                             <Button
                               variant="ghost"
                               size="icon"
@@ -347,6 +444,17 @@ export default function SavingsPage() {
                           </div>
                           <div className="flex items-center gap-2">
                             <Badge variant="outline">{goal.estado}</Badge>
+                            {goal.estado !== "Completado" && goal.estado !== "Cancelado" && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => handleTogglePause("goal", goal as any)}
+                                title={goal.estado === "Activo" ? "Pausar" : "Reactivar"}
+                              >
+                                {goal.estado === "Activo" ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                              </Button>
+                            )}
                             <Button
                               variant="ghost"
                               size="icon"
@@ -448,6 +556,25 @@ export default function SavingsPage() {
                             </p>
                           </div>
                           <div className="flex items-center gap-2">
+                            {payment.estado && payment.estado !== "Activo" && (
+                              <span className={cn(
+                                "text-xs px-2 py-0.5 rounded-full font-medium",
+                                payment.estado === "Pausado" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700",
+                              )}>
+                                {payment.estado}
+                              </span>
+                            )}
+                            {payment.estado !== "Completado" && payment.estado !== "Cancelado" && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => handleTogglePause("future", payment as any)}
+                                title={payment.estado === "Activo" ? "Pausar" : "Reactivar"}
+                              >
+                                {payment.estado === "Activo" ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                              </Button>
+                            )}
                             <Button
                               variant="ghost"
                               size="icon"

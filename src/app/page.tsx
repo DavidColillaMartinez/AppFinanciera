@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -70,6 +70,32 @@ const CHART_COLORS = [
   "#06B6D4",
   "#84CC16",
 ];
+
+function AnimatedNumber({ value, prefix = "", suffix = "", duration = 600 }: { value: number; prefix?: string; suffix?: string; duration?: number }) {
+  const [display, setDisplay] = useState(0);
+  const raf = useRef<number | null>(null);
+  const prefersReduced = useRef(false);
+
+  useEffect(() => {
+    prefersReduced.current = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  }, []);
+
+  useEffect(() => {
+    if (prefersReduced.current) { setDisplay(value); return; }
+    const start = performance.now();
+    const from = 0;
+    function tick(now: number) {
+      const elapsed = now - start;
+      const progress = Math.min(elapsed / duration, 1);
+      setDisplay(from + (value - from) * progress);
+      if (progress < 1) raf.current = requestAnimationFrame(tick);
+    }
+    raf.current = requestAnimationFrame(tick);
+    return () => { if (raf.current) cancelAnimationFrame(raf.current); };
+  }, [value, duration]);
+
+  return <>{prefix}{display.toFixed(2)}{suffix}</>;
+}
 
 interface MetricCardProps {
   title: string;
@@ -170,7 +196,9 @@ export default function VistaMesPage() {
   const [showMonthlySavingsModal, setShowMonthlySavingsModal] = useState(false);
 
   const widgets = dashboardConfig.widgets;
-  const isVisible = (id: string) => widgets.find((w) => w.id === id)?.visible ?? true;
+  const isVisible = (id: string) => widgets.find((w) => w.id === id)?.enabled ?? true;
+  const sortedWidgets = [...widgets].sort((a, b) => a.order - b.order);
+  const layoutMode = dashboardConfig.layoutMode;
 
   const { summary, isLoading, isError } = useFinanceSummary({ monthKey: selectedMonth });
   const {
@@ -273,25 +301,10 @@ export default function VistaMesPage() {
     [variableExpenses, fixedExpensesTotal, deferredPaymentsTotal, futureProvisions],
   );
 
-  const chart = dashboardConfig.charts?.[0];
+  const capacidadAhorro = useMemo(() => {
+    return Math.max(0, available.income - totalObligations);
+  }, [available.income, totalObligations]);
 
-  const chartData = useMemo(() => {
-    if (!chart) return [];
-    return getChartData(chart.dataSource, {
-      transactions: transactions ?? [],
-      categories: categories ?? [],
-      fixedExpenses: fixedExpenses ?? [],
-      futurePayments: futurePayments ?? [],
-      deferredPayments: deferredPayments ?? [],
-    });
-  }, [
-    chart,
-    transactions,
-    categories,
-    fixedExpenses,
-    futurePayments,
-    deferredPayments,
-  ]);
 
   const breakdown = summary?.savingsBreakdown ?? { reserves: [], goals: [], futurePayments: [] };
 
@@ -349,7 +362,7 @@ export default function VistaMesPage() {
   function handleAddType(type: TransactionType) {
     if (type === TransactionType.AHORRO) {
       setShowAddMenu(false);
-      router.push("/savings/monthly");
+      router.push("/savings");
       return;
     }
     setSelectedType(type);
@@ -432,8 +445,6 @@ export default function VistaMesPage() {
     );
   }
 
-  const hasChart = isVisible("chart") && chart;
-
   return (
     <div className="px-4 py-6 space-y-6 pb-32">
       <div className="space-y-3">
@@ -468,195 +479,192 @@ export default function VistaMesPage() {
         </div>
       </div>
 
-      <div className="space-y-3">
-        <MetricCard
-          title="Disponible"
-          value={`${available.available >= 0 ? "+" : ""}${available.available.toFixed(2)}`}
-          icon={Wallet}
-          colorClass={available.available >= 0 ? "text-income" : "text-expense"}
-          bgClass={available.available >= 0 ? "card-income" : "card-expense"}
-          delay={0}
-          onClick={handleDisponibleClick}
-          subtitle="Toca para ver el detalle"
-        />
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <MetricCard
-            title="Ingresos"
-            value={`+${available.income.toFixed(2)}`}
-            icon={TrendingUp}
-            colorClass="text-income"
-            bgClass="card-income"
-            delay={100}
-            onClick={handleIncomeClick}
-            subtitle={
-              available.salaryIncome > 0 && available.extraIncome > 0
-                ? `Nomina + extras`
-                : available.salaryIncome > 0
-                  ? "Nomina"
-                  : "Extras"
-            }
-          />
-          <MetricCard
-            title="Gastos variables"
-            value={`-${variableExpenses.toFixed(2)}`}
-            icon={TrendingDown}
-            colorClass="text-expense"
-            bgClass="card-expense"
-            delay={150}
-            onClick={handleExpensesClick}
-            subtitle="Ver movimientos del mes"
-          />
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <MetricCard
-            title="Ahorro general"
-            value={`+${savingsSummary.totalSaved.toFixed(2)}`}
-            icon={PiggyBank}
-            colorClass="text-savings"
-            bgClass="card-savings"
-            delay={200}
-            onClick={handleGeneralSavingsClick}
-            subtitle={
-              savingsSummary.totalTarget > 0
-                ? `${savingsSummary.overallProgress.toFixed(0)}% del objetivo`
-                : "Toca para ver detalle"
-            }
-            disabled={!savingsBreakdownHasAny}
-          />
-          <MetricCard
-            title="Ahorro del mes"
-            value={`+${monthlySavings.totalForMonth.toFixed(2)}`}
-            icon={CalendarCheck}
-            colorClass="text-savings"
-            bgClass="card-savings"
-            delay={220}
-            onClick={handleMonthlySavingsClick}
-            subtitle={
-              monthlySavings.planned > 0
-                ? `Plan: ${monthlySavings.planned.toFixed(2)}`
-                : "Confirmar ahorro del mes"
-            }
-          />
-        </div>
-        <MetricCard
-          title="Total obligaciones"
-          value={`-${totalObligations.toFixed(2)}`}
-          icon={ListChecks}
-          colorClass="text-warning"
-          bgClass="bg-warning/10 border-warning/20"
-          delay={250}
-          subtitle={`Variables + fijos + aplazados + provisiones`}
-        />
+      <div className={cn(layoutMode === "two-column" ? "grid grid-cols-2 gap-3" : "space-y-3")}>
+        {sortedWidgets.map((w, idx) => {
+          if (!w.enabled) return null;
+          const isFullWidth = w.kind === "chart" || w.id === "detail" || w.id === "obligations" || w.id === "savingsPlan";
+          const wrapperClass = layoutMode === "two-column" && isFullWidth ? "col-span-2" : "";
+
+          if (w.id === "balance") return (
+            <div key={w.id} className={wrapperClass}>
+              <MetricCard
+                title="Disponible"
+                value={`${available.available >= 0 ? "+" : ""}${available.available.toFixed(2)}`}
+                icon={Wallet}
+                colorClass={available.available >= 0 ? "text-income" : "text-expense"}
+                bgClass={available.available >= 0 ? "card-income" : "card-expense"}
+                delay={0}
+                onClick={handleDisponibleClick}
+                subtitle="Toca para ver el detalle"
+              />
+            </div>
+          );
+
+          if (w.id === "income") return (
+            <div key={w.id} className={wrapperClass}>
+              <MetricCard
+                title="Ingresos"
+                value={`+${available.income.toFixed(2)}`}
+                icon={TrendingUp}
+                colorClass="text-income"
+                bgClass="card-income"
+                delay={100}
+                onClick={handleIncomeClick}
+                subtitle={available.salaryIncome > 0 && available.extraIncome > 0 ? "Nomina + extras" : available.salaryIncome > 0 ? "Nomina" : "Extras"}
+              />
+            </div>
+          );
+
+          if (w.id === "expenses") return (
+            <div key={w.id} className={wrapperClass}>
+              <MetricCard
+                title="Gastos variables"
+                value={`-${variableExpenses.toFixed(2)}`}
+                icon={TrendingDown}
+                colorClass="text-expense"
+                bgClass="card-expense"
+                delay={150}
+                onClick={handleExpensesClick}
+                subtitle="Ver movimientos del mes"
+              />
+            </div>
+          );
+
+          if (w.id === "savings") return (
+            <div key={w.id} className={wrapperClass}>
+              <MetricCard
+                title="Ahorro general"
+                value={`+${savingsSummary.totalSaved.toFixed(2)}`}
+                icon={PiggyBank}
+                colorClass="text-savings"
+                bgClass="card-savings"
+                delay={200}
+                onClick={handleGeneralSavingsClick}
+                subtitle={savingsSummary.totalTarget > 0 ? `${savingsSummary.overallProgress.toFixed(0)}% del objetivo` : "Toca para ver detalle"}
+                disabled={!savingsBreakdownHasAny}
+              />
+            </div>
+          );
+
+          if (w.id === "monthlySavings") return (
+            <div key={w.id} className={wrapperClass}>
+              <MetricCard
+                title="Ahorro del mes"
+                value={`+${monthlySavings.totalForMonth.toFixed(2)}`}
+                icon={CalendarCheck}
+                colorClass="text-savings"
+                bgClass="card-savings"
+                delay={220}
+                onClick={handleMonthlySavingsClick}
+                subtitle={monthlySavings.planned > 0 ? `Plan: ${monthlySavings.planned.toFixed(2)}` : "Confirmar ahorro del mes"}
+              />
+            </div>
+          );
+
+          if (w.id === "obligations") return (
+            <div key={w.id} className={wrapperClass}>
+              <MetricCard
+                title="Total obligaciones"
+                value={`-${totalObligations.toFixed(2)}`}
+                icon={ListChecks}
+                colorClass="text-warning"
+                bgClass="bg-warning/10 border-warning/20"
+                delay={250}
+                subtitle="Variables + fijos + aplazados + provisiones"
+              />
+            </div>
+          );
+
+          if (w.id === "savingsPlan") return (
+            <div key={w.id} className={wrapperClass}>
+              <PayrollStatusCard
+                monthName={monthName}
+                salaryEnabled={salaryEnabled}
+                salaryType={salaryConfig?.type ?? "fixed"}
+                salaryFixedAmount={salaryConfig?.fixedAmount ?? 0}
+                salaryMovementExists={salaryMovementExists}
+                salaryIncome={salaryIncome}
+                salaryAccountName={salaryAccountName}
+                salaryDay={salaryConfig?.day ?? 1}
+                hasConfig={!!salaryConfig?.updatedAt}
+              />
+            </div>
+          );
+
+          if (w.id === "detail") return (
+            <div key={w.id} className={wrapperClass}>
+              {recentTransactions.length > 0 && (
+                <Card className="overflow-hidden animate-fade-in" style={{ animationDelay: "350ms" }}>
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between mb-4">
+                      <h2 className="text-sm font-semibold">Ultimos movimientos</h2>
+                      <a href="/transactions" className="text-xs text-primary hover:underline">Ver todos →</a>
+                    </div>
+                    <div className="space-y-2">
+                      {recentTransactions.map((t) => (
+                        <div key={t.id} className="flex items-center justify-between py-2 border-b border-border/50 last:border-0">
+                          <div className="flex items-center gap-3 flex-1 min-w-0">
+                            <div className={cn("rounded-lg p-2", t.tipo === "Ingreso" ? "bg-income/10" : t.tipo === "Gasto" ? "bg-expense/10" : t.tipo === "Ahorro" ? "bg-savings/10" : "bg-muted")}>
+                              {t.tipo === "Ingreso" ? <ArrowDownLeft className="h-4 w-4 text-income" /> : t.tipo === "Gasto" ? <ArrowUpRight className="h-4 w-4 text-expense" /> : <PiggyBank className="h-4 w-4 text-savings" />}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-sm truncate">{t.concepto || (t.tipo === "Ingreso" ? "Ingreso" : t.tipo === "Gasto" ? "Gasto" : t.tipo === "Transferencia interna" ? "Transferencia interna" : t.tipo)}</p>
+                              <p className="text-xs text-muted-foreground">{t.categoria} · {t.fecha}</p>
+                            </div>
+                          </div>
+                          <p className={cn("text-sm font-semibold", t.tipo === "Ingreso" ? "text-income" : t.tipo === "Gasto" ? "text-expense" : "text-savings")}>
+                            {t.tipo === "Ingreso" ? "+" : "-"}{t.importe.toFixed(2)}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          );
+
+          if (w.kind === "chart" && w.chartId) {
+            const chart = dashboardConfig.charts.find((c) => c.id === w.chartId);
+            if (!chart) return null;
+            const cData = getChartData(chart.dataSource, {
+              transactions: transactions ?? [],
+              categories: categories ?? [],
+              fixedExpenses: fixedExpenses ?? [],
+              futurePayments: futurePayments ?? [],
+              deferredPayments: deferredPayments ?? [],
+            });
+            return (
+              <div key={w.id} className={wrapperClass}>
+                <Card className="overflow-hidden animate-fade-in" style={{ borderColor: chart.accentColor + "30" }}>
+                  <CardContent className="p-4">
+                    <div className="mb-4 flex items-start justify-between gap-3">
+                      <h2 className="text-sm font-semibold flex items-center gap-2">
+                        <Receipt className="h-4 w-4 text-muted-foreground" />
+                        {chart.name}
+                      </h2>
+                      <span className="text-xs text-muted-foreground capitalize">{chart.dataSource}</span>
+                    </div>
+                    <div className="h-64">
+                      <ChartRenderer chart={chart} data={cData} />
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            );
+          }
+
+          return null;
+        })}
       </div>
 
-      {hasChart && (
-        <Card
-          className="overflow-hidden animate-fade-in"
-          style={{ animationDelay: "300ms", borderColor: chart.accentColor + "30" }}
-        >
-          <CardContent className="p-4">
-            <div className="mb-4 flex items-start justify-between gap-3">
-              <h2 className="text-sm font-semibold flex items-center gap-2">
-                <Receipt className="h-4 w-4 text-muted-foreground" />
-                {chart.name}
-              </h2>
-              <span className="text-xs text-muted-foreground capitalize">
-                {chart.dataSource}
-              </span>
-            </div>
-            <div className="h-64">
-              <ChartRenderer chart={chart} data={chartData} />
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {isVisible("chart") && !hasChart && (
-        <Card className="overflow-hidden animate-fade-in" style={{ animationDelay: "300ms" }}>
+      {dashboardConfig.charts.length === 0 && (
+        <Card className="overflow-hidden animate-fade-in">
           <CardContent className="p-4 text-center py-8">
             <p className="text-sm text-muted-foreground">No hay graficos creados.</p>
             <p className="text-xs text-muted-foreground mt-1">
               Usa el boton de personalizar para crear uno.
             </p>
-          </CardContent>
-        </Card>
-      )}
-
-      {isVisible("savingsPlan") && (
-        <SavingsPlanWidget
-          monthName={monthName}
-          salaryEnabled={salaryEnabled}
-          salaryType={salaryConfig?.type ?? "fixed"}
-          salaryFixedAmount={salaryConfig?.fixedAmount ?? 0}
-          salaryMovementExists={salaryMovementExists}
-          salaryIncome={salaryIncome}
-          salaryAccountName={salaryAccountName}
-          salaryDay={salaryConfig?.day ?? 1}
-          hasConfig={!!salaryConfig?.updatedAt}
-        />
-      )}
-
-      {isVisible("detail") && recentTransactions.length > 0 && (
-        <Card className="overflow-hidden animate-fade-in" style={{ animationDelay: "350ms" }}>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-semibold">Últimos movimientos</h2>
-              <a href="/transactions" className="text-xs text-primary hover:underline">
-                Ver todos →
-              </a>
-            </div>
-            <div className="space-y-2">
-              {recentTransactions.map((t) => (
-                <div
-                  key={t.id}
-                  className="flex items-center justify-between py-2 border-b border-border/50 last:border-0"
-                >
-                  <div className="flex items-center gap-3 flex-1 min-w-0">
-                    <div
-                      className={cn(
-                        "rounded-lg p-2",
-                        t.tipo === "Ingreso"
-                          ? "bg-income/10"
-                          : t.tipo === "Gasto"
-                            ? "bg-expense/10"
-                            : t.tipo === "Ahorro"
-                              ? "bg-savings/10"
-                              : "bg-muted",
-                      )}
-                    >
-                      {t.tipo === "Ingreso" ? (
-                        <ArrowDownLeft className="h-4 w-4 text-income" />
-                      ) : t.tipo === "Gasto" ? (
-                        <ArrowUpRight className="h-4 w-4 text-expense" />
-                      ) : (
-                        <PiggyBank className="h-4 w-4 text-savings" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm truncate">
-                        {t.concepto || t.tipo === "Ingreso" ? "Ingreso" : t.tipo === "Gasto" ? "Gasto" : t.tipo === "Transferencia interna" ? "Transferencia interna" : t.tipo}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {t.categoria} · {t.fecha}
-                      </p>
-                    </div>
-                  </div>
-                  <p
-                    className={cn(
-                      "text-sm font-semibold",
-                      t.tipo === "Ingreso"
-                        ? "text-income"
-                        : t.tipo === "Gasto"
-                          ? "text-expense"
-                          : "text-savings",
-                    )}
-                  >
-                    {t.tipo === "Ingreso" ? "+" : "-"}
-                    {t.importe.toFixed(2)}
-                  </p>
-                </div>
-              ))}
-            </div>
           </CardContent>
         </Card>
       )}
@@ -769,6 +777,7 @@ export default function VistaMesPage() {
         goals={breakdown.goals}
         futurePayments={breakdown.futurePayments}
         hasAnyItems={savingsBreakdownHasAny}
+        availableCapacity={capacidadAhorro}
       />
 
       <MonthlySavingsBreakdownModal
@@ -783,7 +792,7 @@ export default function VistaMesPage() {
   );
 }
 
-interface SavingsPlanWidgetProps {
+interface PayrollStatusCardProps {
   monthName: string;
   salaryEnabled: boolean;
   salaryType: "fixed" | "variable";
@@ -795,7 +804,7 @@ interface SavingsPlanWidgetProps {
   hasConfig: boolean;
 }
 
-function SavingsPlanWidget({
+function PayrollStatusCard({
   monthName,
   salaryEnabled,
   salaryType,
@@ -805,7 +814,7 @@ function SavingsPlanWidget({
   salaryAccountName,
   salaryDay,
   hasConfig,
-}: SavingsPlanWidgetProps) {
+}: PayrollStatusCardProps) {
   if (!hasConfig) {
     return (
       <Card
@@ -815,10 +824,10 @@ function SavingsPlanWidget({
         <CardContent className="p-4">
           <div className="flex items-center gap-2 mb-2">
             <Target className="h-4 w-4 text-primary" />
-            <h2 className="text-sm font-semibold">Plan personalizado</h2>
+            <h2 className="text-sm font-semibold">Tu nomina</h2>
           </div>
           <p className="text-xs text-muted-foreground mb-3">
-            Configura tu nomina para ver un plan de ahorro basado en tus ingresos.
+            Configura tu nomina para ver el estado de tus ingresos mensuales.
           </p>
           <Button asChild size="sm" variant="outline" className="w-full">
             <a href="/more/salary">Configurar nomina</a>
@@ -837,11 +846,10 @@ function SavingsPlanWidget({
         <CardContent className="p-4">
           <div className="flex items-center gap-2 mb-2">
             <Target className="h-4 w-4 text-muted-foreground" />
-            <h2 className="text-sm font-semibold">Plan personalizado</h2>
+            <h2 className="text-sm font-semibold">Tu nomina</h2>
           </div>
           <p className="text-xs text-muted-foreground mb-3">
-            Tu nomina esta desactivada. Si quieres usar un plan de ahorro
-            personalizado, activala desde Ajustes &gt; Nomina.
+            Tu nomina esta desactivada. Activala desde Ajustes &gt; Nomina.
           </p>
           <Button asChild size="sm" variant="outline" className="w-full">
             <a href="/more/salary">Activar nomina</a>
@@ -860,7 +868,7 @@ function SavingsPlanWidget({
         <CardContent className="p-4">
           <div className="flex items-center gap-2 mb-2">
             <Target className="h-4 w-4 text-primary" />
-            <h2 className="text-sm font-semibold">Plan personalizado</h2>
+            <h2 className="text-sm font-semibold">Tu nomina</h2>
           </div>
           <p className="text-xs text-muted-foreground mb-3">
             Tu nomina variable esta configurada, pero falta introducir el
@@ -885,7 +893,7 @@ function SavingsPlanWidget({
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-sm font-semibold flex items-center gap-2">
               <Target className="h-4 w-4 text-primary" />
-              Plan de ahorro del mes
+              Tu nomina
             </h2>
             <span className="text-xs px-2 py-1 rounded-full bg-income/20 text-income font-medium">
               {salaryType === "fixed" ? "Fija" : "Variable"}
@@ -893,7 +901,7 @@ function SavingsPlanWidget({
           </div>
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Tu nomina</span>
+              <span className="text-muted-foreground">Nomina mensual</span>
               <span className="font-medium">{displayAmount.toFixed(2)} €</span>
             </div>
             <div className="rounded-lg bg-amber-100/70 p-2 text-xs text-amber-900 flex items-start gap-1.5">
@@ -906,10 +914,6 @@ function SavingsPlanWidget({
               </span>
             </div>
           </div>
-          <p className="text-xs text-muted-foreground mt-3">
-            Toca el card &quot;Disponible&quot; arriba para ver el desglose completo
-            de {monthName}.
-          </p>
         </CardContent>
       </Card>
     );
@@ -925,7 +929,7 @@ function SavingsPlanWidget({
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-semibold flex items-center gap-2">
             <Target className="h-4 w-4 text-primary" />
-            Plan de ahorro del mes
+            Tu nomina
           </h2>
           <span className="text-xs px-2 py-1 rounded-full bg-income/20 text-income font-medium">
             {salaryType === "fixed" ? "Fija" : "Variable"}
@@ -933,7 +937,7 @@ function SavingsPlanWidget({
         </div>
         <div className="space-y-2 text-sm">
           <div className="flex justify-between">
-            <span className="text-muted-foreground">Tu nomina</span>
+            <span className="text-muted-foreground">Nomina mensual</span>
             <span className="font-medium">{displayAmount.toFixed(2)} €</span>
           </div>
           {salaryAccountName && (
@@ -950,10 +954,6 @@ function SavingsPlanWidget({
             </span>
           </div>
         </div>
-        <p className="text-xs text-muted-foreground mt-3">
-          Toca el card &quot;Disponible&quot; arriba para ver el desglose completo
-          de {monthName}.
-        </p>
       </CardContent>
     </Card>
   );

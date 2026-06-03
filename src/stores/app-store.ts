@@ -3,11 +3,6 @@ import { persist } from "zustand/middleware";
 
 const STORAGE_KEY = "app_finanzas_state";
 
-export interface DashboardWidget {
-  id: string;
-  visible: boolean;
-}
-
 export type ChartType = "bar" | "pie" | "area" | "line";
 
 export type ChartDataSource =
@@ -30,23 +25,46 @@ export interface DashboardChart {
   showLabels: boolean;
 }
 
+export interface DashboardWidgetItem {
+  id: string;
+  kind: "builtin" | "chart";
+  enabled: boolean;
+  order: number;
+  size?: "compact" | "full";
+  chartId?: string;
+}
+
 export interface DashboardConfig {
-  widgets: DashboardWidget[];
-  monthSelectorVisible: boolean;
+  layoutMode: "single" | "two-column";
+  widgets: DashboardWidgetItem[];
   charts: DashboardChart[];
 }
 
+export type LayoutMode = "single" | "two-column";
+
+const BUILTIN_WIDGET_IDS = [
+  "balance",
+  "income",
+  "expenses",
+  "savings",
+  "monthlySavings",
+  "savingsPlan",
+  "obligations",
+  "detail",
+] as const;
+
 const DEFAULT_DASHBOARD_CONFIG: DashboardConfig = {
+  layoutMode: "single",
   widgets: [
-    { id: "balance", visible: true },
-    { id: "savings", visible: true },
-    { id: "income", visible: true },
-    { id: "expenses", visible: true },
-    { id: "chart", visible: true },
-    { id: "detail", visible: true },
-    { id: "savingsPlan", visible: true },
+    { id: "balance", kind: "builtin", enabled: true, order: 0 },
+    { id: "income", kind: "builtin", enabled: true, order: 1 },
+    { id: "expenses", kind: "builtin", enabled: true, order: 2 },
+    { id: "savings", kind: "builtin", enabled: true, order: 3 },
+    { id: "monthlySavings", kind: "builtin", enabled: true, order: 4 },
+    { id: "savingsPlan", kind: "builtin", enabled: true, order: 5 },
+    { id: "obligations", kind: "builtin", enabled: true, order: 6 },
+    { id: "detail", kind: "builtin", enabled: true, order: 7 },
   ],
-  monthSelectorVisible: true,
   charts: [
     {
       id: "default-categories",
@@ -93,7 +111,8 @@ export interface AppActions {
   setOnboardingSeen: () => void;
   setAuthStatus: (status: AuthStatus) => void;
   setDashboardConfig: (config: Partial<DashboardConfig>) => void;
-  toggleWidget: (widgetId: string) => void;
+  setLayoutMode: (mode: LayoutMode) => void;
+  toggleWidgetEnabled: (widgetId: string) => void;
   moveWidget: (widgetId: string, direction: "up" | "down") => void;
   reorderWidgets: (fromIndex: number, toIndex: number) => void;
   resetDashboardConfig: () => void;
@@ -105,7 +124,6 @@ export interface AppActions {
   addChart: (chart: Omit<DashboardChart, "id">) => void;
   updateChart: (chartId: string, updates: Partial<DashboardChart>) => void;
   removeChart: (chartId: string) => void;
-  reorderCharts: (fromIndex: number, toIndex: number) => void;
   setTemplateVersion: (templateVersion: string | null, appMinVersion: string | null) => void;
 }
 
@@ -180,12 +198,17 @@ export const useAppStore = create<AppState & AppActions>()(
           dashboardConfig: { ...state.dashboardConfig, ...config },
         })),
 
-      toggleWidget: (widgetId) =>
+      setLayoutMode: (mode) =>
+        set((state) => ({
+          dashboardConfig: { ...state.dashboardConfig, layoutMode: mode },
+        })),
+
+      toggleWidgetEnabled: (widgetId) =>
         set((state) => ({
           dashboardConfig: {
             ...state.dashboardConfig,
             widgets: state.dashboardConfig.widgets.map((w) =>
-              w.id === widgetId ? { ...w, visible: !w.visible } : w,
+              w.id === widgetId ? { ...w, enabled: !w.enabled } : w,
             ),
           },
         })),
@@ -199,7 +222,10 @@ export const useAppStore = create<AppState & AppActions>()(
           if (newIdx < 0 || newIdx >= widgets.length) return state;
           [widgets[idx], widgets[newIdx]] = [widgets[newIdx], widgets[idx]];
           return {
-            dashboardConfig: { ...state.dashboardConfig, widgets },
+            dashboardConfig: {
+              ...state.dashboardConfig,
+              widgets: widgets.map((w, i) => ({ ...w, order: i })),
+            },
           };
         }),
 
@@ -209,7 +235,10 @@ export const useAppStore = create<AppState & AppActions>()(
           const [removed] = widgets.splice(fromIndex, 1);
           widgets.splice(toIndex, 0, removed);
           return {
-            dashboardConfig: { ...state.dashboardConfig, widgets },
+            dashboardConfig: {
+              ...state.dashboardConfig,
+              widgets: widgets.map((w, i) => ({ ...w, order: i })),
+            },
           };
         }),
 
@@ -247,15 +276,24 @@ export const useAppStore = create<AppState & AppActions>()(
         })),
 
       addChart: (chart) =>
-        set((state) => ({
-          dashboardConfig: {
-            ...state.dashboardConfig,
-            charts: [
-              ...state.dashboardConfig.charts,
-              { ...chart, id: `chart-${Date.now()}` },
-            ],
-          },
-        })),
+        set((state) => {
+          const chartId = `chart-${Date.now()}`;
+          const widgetId = `widget-${chartId}`;
+          const maxOrder = state.dashboardConfig.widgets.length;
+          return {
+            dashboardConfig: {
+              ...state.dashboardConfig,
+              charts: [
+                ...state.dashboardConfig.charts,
+                { ...chart, id: chartId },
+              ],
+              widgets: [
+                ...state.dashboardConfig.widgets,
+                { id: widgetId, kind: "chart" as const, enabled: true, order: maxOrder, chartId },
+              ],
+            },
+          };
+        }),
 
       updateChart: (chartId, updates) =>
         set((state) => ({
@@ -272,25 +310,16 @@ export const useAppStore = create<AppState & AppActions>()(
           dashboardConfig: {
             ...state.dashboardConfig,
             charts: state.dashboardConfig.charts.filter((c) => c.id !== chartId),
+            widgets: state.dashboardConfig.widgets.filter((w) => w.chartId !== chartId),
           },
         })),
-
-      reorderCharts: (fromIndex, toIndex) =>
-        set((state) => {
-          const charts = [...state.dashboardConfig.charts];
-          const [removed] = charts.splice(fromIndex, 1);
-          charts.splice(toIndex, 0, removed);
-          return {
-            dashboardConfig: { ...state.dashboardConfig, charts },
-          };
-        }),
 
       setTemplateVersion: (templateVersion, appMinVersion) =>
         set({ templateVersion, appMinVersion }),
     }),
     {
       name: STORAGE_KEY,
-      version: 3,
+      version: 4,
       partialize: (state) => ({
         sheetId: state.sheetId,
         sheetUrl: state.sheetUrl,
@@ -311,27 +340,42 @@ export const useAppStore = create<AppState & AppActions>()(
         monthlySavingsAddedMonths: state.monthlySavingsAddedMonths,
       }),
       onRehydrateStorage: () => (state) => {
-        if (state) {
-          const stored = state.dashboardConfig;
-          const defaults = DEFAULT_DASHBOARD_CONFIG;
-          if (!stored || typeof stored !== "object") {
-            state.dashboardConfig = defaults;
-            return;
+        if (!state) return;
+        const cfg = state.dashboardConfig as any;
+        if (!cfg || !cfg.widgets) {
+          state.dashboardConfig = DEFAULT_DASHBOARD_CONFIG;
+          return;
+        }
+        const firstWidget = cfg.widgets[0];
+          if (firstWidget && "visible" in firstWidget) {
+            const oldWidgets: Array<{ id: string; visible: boolean }> = cfg.widgets;
+            const oldCharts: any[] = Array.isArray(cfg.charts) ? cfg.charts : [];
+            const newWidgets: DashboardWidgetItem[] = oldWidgets.map((w: any, i: number) => ({
+            id: w.id,
+            kind: "builtin" as const,
+            enabled: w.visible,
+            order: i,
+          }));
+          for (const c of oldCharts) {
+            const wid = `widget-chart-${c.id}`;
+            if (!newWidgets.some((w: any) => w.id === wid)) {
+              newWidgets.push({
+                id: wid,
+                kind: "chart" as "builtin" | "chart",
+                enabled: true,
+                order: newWidgets.length,
+                chartId: c.id,
+              });
+            }
           }
-          if (!Array.isArray(stored.widgets)) {
-            state.dashboardConfig = { ...defaults, ...stored, widgets: defaults.widgets };
-          } else {
-            const missingWidgets = defaults.widgets.filter(
-              (dw) => !stored.widgets.some((sw: DashboardWidget) => sw.id === dw.id)
-            );
-            state.dashboardConfig = { ...defaults, ...stored, widgets: [...stored.widgets, ...missingWidgets] };
-          }
-          if (!Array.isArray(stored.charts)) {
-            state.dashboardConfig = { ...state.dashboardConfig, charts: defaults.charts };
-          }
-          if (!state.authStatus) {
-            state.authStatus = "unknown";
-          }
+          state.dashboardConfig = {
+            layoutMode: "single",
+            widgets: newWidgets,
+            charts: oldCharts,
+          } as any;
+        }
+        if (!("layoutMode" in cfg)) {
+          (state.dashboardConfig as any).layoutMode = "single";
         }
       },
     },
