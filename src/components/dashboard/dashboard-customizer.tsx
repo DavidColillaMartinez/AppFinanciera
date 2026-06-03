@@ -57,7 +57,7 @@ const DATA_SOURCES: { value: ChartDataSource; label: string }[] = [
   { value: "expenses", label: "Gastos fijos" },
   { value: "savings", label: "Ahorros" },
   { value: "income", label: "Ingresos" },
-  { value: "total", label: "Total de gastos" },
+  { value: "total", label: "Gastos total" },
   { value: "fixed", label: "Gastos fijos mensuales" },
   { value: "deferred", label: "Pagos aplazados" },
   { value: "future", label: "Pagos futuros" },
@@ -80,7 +80,7 @@ interface ChartEditorState {
   editingChartId: string | null;
   name: string;
   type: ChartType;
-  dataSource: ChartDataSource;
+  dataSources: ChartDataSource[];
   accentColor: string;
   animations: boolean;
   showLabels: boolean;
@@ -103,7 +103,7 @@ export function DashboardCustomizer({ open, onOpenChange }: DashboardCustomizerP
     editingChartId: null,
     name: "",
     type: "pie",
-    dataSource: "categories",
+    dataSources: ["categories"],
     accentColor: CHART_COLORS[0],
     animations: true,
     showLabels: false,
@@ -117,7 +117,7 @@ export function DashboardCustomizer({ open, onOpenChange }: DashboardCustomizerP
       editingChartId: null,
       name: "",
       type: "pie",
-      dataSource: "categories",
+      dataSources: ["categories"],
       accentColor: CHART_COLORS[0],
       animations: true,
       showLabels: false,
@@ -125,22 +125,22 @@ export function DashboardCustomizer({ open, onOpenChange }: DashboardCustomizerP
   }
 
   function handleAddChart() {
-    setEditor({ step: "chart-name", editingChartId: null, name: "", type: "pie", dataSource: "categories", accentColor: CHART_COLORS[0], animations: true, showLabels: false });
+    setEditor({ step: "chart-name", editingChartId: null, name: "", type: "pie", dataSources: ["categories"], accentColor: CHART_COLORS[0], animations: true, showLabels: false });
   }
 
   function handleEditChart(chart: DashboardChart) {
-    setEditor({ step: "chart-style", editingChartId: chart.id, name: chart.name, type: chart.type, dataSource: chart.dataSource, accentColor: chart.accentColor, animations: chart.animations, showLabels: chart.showLabels });
+    setEditor({ step: "chart-style", editingChartId: chart.id, name: chart.name, type: chart.type, dataSources: chart.dataSources ?? [chart.dataSource], accentColor: chart.accentColor, animations: chart.animations, showLabels: chart.showLabels });
   }
 
   function handleSaveChart() {
     if (editor.editingChartId) {
       updateChart(editor.editingChartId, {
-        name: editor.name, type: editor.type, dataSource: editor.dataSource,
+        name: editor.name, type: editor.type, dataSources: editor.dataSources, dataSource: editor.dataSources[0] ?? "categories",
         accentColor: editor.accentColor, animations: editor.animations, showLabels: editor.showLabels,
       });
     } else {
       addChart({
-        name: editor.name, type: editor.type, dataSource: editor.dataSource,
+        name: editor.name, type: editor.type, dataSources: editor.dataSources, dataSource: editor.dataSources[0] ?? "categories",
         accentColor: editor.accentColor, animations: editor.animations, showLabels: editor.showLabels,
       });
     }
@@ -290,14 +290,26 @@ export function DashboardCustomizer({ open, onOpenChange }: DashboardCustomizerP
                 </div>
               </div>
               <div>
-                <Label className="text-xs text-muted-foreground mb-2 block uppercase tracking-wide">Datos</Label>
+                <Label className="text-xs text-muted-foreground mb-2 block uppercase tracking-wide">Datos (elige uno o varios)</Label>
                 <div className="space-y-1">
-                  {DATA_SOURCES.map((ds) => (
-                    <button key={ds.value} onClick={() => setEditor((p) => ({ ...p, dataSource: ds.value }))}
-                      className={cn("w-full text-left px-3 py-2 rounded-lg text-sm transition-all", editor.dataSource === ds.value ? "bg-primary/10 text-primary font-medium" : "hover:bg-muted")}>
-                      {ds.label}
-                    </button>
-                  ))}
+                  {DATA_SOURCES.map((ds) => {
+                    const selected = editor.dataSources.includes(ds.value);
+                    return (
+                      <button key={ds.value} onClick={() => {
+                        setEditor((p) => {
+                          const exists = p.dataSources.includes(ds.value);
+                          const next = exists ? p.dataSources.filter((v) => v !== ds.value) : [...p.dataSources, ds.value];
+                          return { ...p, dataSources: next.length > 0 ? next : [ds.value] };
+                        });
+                      }}
+                        className={cn("w-full text-left px-3 py-2 rounded-lg text-sm transition-all flex items-center gap-2", selected ? "bg-primary/10 text-primary font-medium" : "hover:bg-muted")}>
+                        <span className={cn("w-4 h-4 rounded border-2 flex items-center justify-center text-[10px]", selected ? "border-primary bg-primary text-white" : "border-muted-foreground/30")}>
+                          {selected ? "✓" : ""}
+                        </span>
+                        {ds.label}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
               <div>

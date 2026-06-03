@@ -180,7 +180,7 @@ export default function MorePage() {
 
         <Card className="overflow-hidden transition-all hover:shadow-md">
           <CardContent className="p-0">
-            <Link href="/#customize" className="flex items-center justify-between p-4 active:bg-muted/50">
+            <Link href="/" className="flex items-center justify-between p-4 active:bg-muted/50">
               <div className="flex items-center gap-4">
                 <div className="rounded-xl bg-primary/10 p-3">
                   <Palette className="h-5 w-5 text-primary" />

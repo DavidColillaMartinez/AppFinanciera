@@ -810,6 +810,47 @@ live in `docs/FINANCE_AUDIT.md`.
 
 ---
 
+## Phase 12.4.1 — Dashboard customization repair — `implemented`
+
+- **Purpose**: Fix drag/reorder on dashboard, add @dnd-kit, support multi-source
+  charts, rename "Total obligaciones" to "Gastos total", add layout toggle on
+  dashboard main page.
+- **Main files**:
+  - `src/app/page.tsx` — Added `@dnd-kit/core` and `@dnd-kit/sortable` for
+    drag/reorder. New `SortableWidgetWrapper` component using `useSortable`.
+    Widget grid wrapped in `DndContext` + `SortableContext`. Long-press activation
+    via `PointerSensor` with distance constraint. Layout toggle (1 col / 2 col)
+    and reorder mode buttons in dashboard header. Renamed "Total obligaciones"
+    to "Gastos total". Chart `getChartData` now uses `dataSources` array.
+    `onClick` handlers disabled during reorder mode.
+  - `src/stores/app-store.ts` — Added `dataSources?: ChartDataSource[]` to
+    `DashboardChart`. Migration in `onRehydrateStorage` converts old
+    `dataSource` to `dataSources: [dataSource]`.
+  - `src/lib/finance/chart-data.ts` — Rewritten to support both single-source
+    (returns per-item entries) and multi-source (returns aggregated entries
+    from `getSingleSourceData`). Backward compatible.
+  - `src/components/dashboard/dashboard-customizer.tsx` — Multi-source data
+    picker using checkboxes. Renamed "Total de gastos" → "Gastos total".
+  - `src/components/dashboard/dashboard-widgets.tsx` — **Removed** (dead code).
+- **Dependencies added**: `@dnd-kit/core`, `@dnd-kit/sortable`, `@dnd-kit/utilities`.
+
+---
+
+## Phase 12.5 — PWA and visual polish — `implemented`
+
+- **Purpose**: Dark mode foundation, iOS zoom prevention, bottom nav polish,
+  More page fixes, animation count-up.
+- **Main files**:
+  - `src/app/globals.css` — Added `.dark` theme with all CSS variables. Added
+    `input, select, textarea { font-size: 16px }` for iOS zoom prevention.
+    Dark color-scheme for inputs in `.dark`.
+  - `src/app/more/page.tsx` — Changed "Personalizar Dashboard" link from
+    `/#customize` to `/` (dashboard opens normally; user taps settings icon).
+  - `src/app/page.tsx` — `AnimatedNumber` component uses `requestAnimationFrame`
+    with `prefers-reduced-motion` respect (implemented in Phase 12.4).
+
+---
+
 | Phase | Topic | Status |
 |-------|-------|--------|
 | 3 | Template / schema / validation | implemented |
@@ -830,4 +871,7 @@ live in `docs/FINANCE_AUDIT.md`.
 | 12.3.2 | Savings accuracy: dashboard real capacity, pause/reactivate, form prop cleanup | implemented |
 | 12.X | Professional Google Sheet creation flow (revised: programmatic creation) | implemented |
 | 12.X.1 | Fix Google logout + persist auto-created Sheet URL | implemented |
+| 12.4 | Real dashboard customization: unified widgets, layout, charts as widgets | implemented |
+| 12.4.1 | Dashboard repair: drag/reorder, multi-source charts, mobile polish | implemented |
+| 12.5 | PWA polish: dark mode foundation, iOS zoom fix, dead code cleanup | implemented |
 | 12.4 | Real dashboard customization: unified widgets, layout, chart-as-widget | implemented |

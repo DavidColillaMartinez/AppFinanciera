@@ -20,6 +20,7 @@ export interface DashboardChart {
   name: string;
   type: ChartType;
   dataSource: ChartDataSource;
+  dataSources?: ChartDataSource[];
   accentColor: string;
   animations: boolean;
   showLabels: boolean;
@@ -376,6 +377,18 @@ export const useAppStore = create<AppState & AppActions>()(
         }
         if (!("layoutMode" in cfg)) {
           (state.dashboardConfig as any).layoutMode = "single";
+        }
+        const migratedCharts = (state.dashboardConfig.charts || []).map((c: any) => {
+          if (!c.dataSources && c.dataSource) {
+            return { ...c, dataSources: [c.dataSource] };
+          }
+          if (!c.dataSources) {
+            return { ...c, dataSources: ["categories" as ChartDataSource] };
+          }
+          return c;
+        });
+        if (migratedCharts.length > 0) {
+          (state.dashboardConfig as any).charts = migratedCharts;
         }
       },
     },

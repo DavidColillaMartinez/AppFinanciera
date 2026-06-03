@@ -20,7 +20,9 @@ import {
   Target,
   CalendarCheck,
   AlertTriangle,
-
+  Columns2,
+  LayoutGrid,
+  GripVertical,
 } from "lucide-react";
 import {
   Dialog,
@@ -40,6 +42,20 @@ import { buildSalaryMovementId } from "@/lib/finance/salary";
 import { useSalaryConfig, useEnsureSalaryForMonth } from "@/features/salary/hooks/use-salary";
 import { useFinanceSummary } from "@/hooks/use-finance-summary";
 import { useAppStore } from "@/stores/app-store";
+import type { ChartDataSource } from "@/stores/app-store";
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { useCategories } from "@/features/categories/hooks/use-categories";
 import { useAccounts } from "@/features/accounts/hooks/use-accounts";
 import { useFixedExpenses } from "@/features/fixed-expenses/hooks/use-fixed-expenses";
@@ -95,6 +111,21 @@ function AnimatedNumber({ value, prefix = "", suffix = "", duration = 600 }: { v
   }, [value, duration]);
 
   return <>{prefix}{display.toFixed(2)}{suffix}</>;
+}
+
+function SortableWidgetWrapper({ id, children, reorderMode }: { id: string; children: React.ReactNode; reorderMode: boolean }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id, disabled: !reorderMode });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 50 : undefined,
+  };
+  return (
+    <div ref={setNodeRef} style={style} {...attributes} {...(reorderMode ? listeners : {})}>
+      {children}
+    </div>
+  );
 }
 
 interface MetricCardProps {
@@ -181,7 +212,7 @@ function MetricCard({
 
 export default function VistaMesPage() {
   const router = useRouter();
-  const { sheetId, dashboardConfig, addSalaryMonth } = useAppStore();
+  const { sheetId, dashboardConfig, addSalaryMonth, setLayoutMode, reorderWidgets } = useAppStore();
   const dataReady = !!sheetId && hasToken();
   const [selectedMonth, setSelectedMonth] = useState(
     new Date().toISOString().slice(0, 7),
@@ -191,6 +222,10 @@ export default function VistaMesPage() {
   const [showCustomizer, setShowCustomizer] = useState(false);
   const [selectedType, setSelectedType] = useState<TransactionType | null>(null);
   const [salaryAutoAdded, setSalaryAutoAdded] = useState(false);
+  const [reorderMode, setReorderMode] = useState(false);
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: reorderMode ? 0 : 100 } })
+  );
   const [showDisponibleModal, setShowDisponibleModal] = useState(false);
   const [showGeneralSavingsModal, setShowGeneralSavingsModal] = useState(false);
   const [showMonthlySavingsModal, setShowMonthlySavingsModal] = useState(false);
@@ -458,7 +493,25 @@ export default function VistaMesPage() {
             </h1>
             <p className="text-sm text-muted-foreground">Vista del mes</p>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-1 shrink-0">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="rounded-xl h-9 w-9"
+              aria-label={layoutMode === "single" ? "Una columna" : "Dos columnas"}
+              onClick={() => setLayoutMode(layoutMode === "single" ? "two-column" : "single")}
+            >
+              {layoutMode === "single" ? <LayoutGrid className="h-4 w-4" /> : <Columns2 className="h-4 w-4" />}
+            </Button>
+            <Button
+              variant={reorderMode ? "default" : "ghost"}
+              size="icon"
+              className="rounded-xl h-9 w-9"
+              aria-label={reorderMode ? "Salir de ordenar" : "Ordenar widgets"}
+              onClick={() => setReorderMode(!reorderMode)}
+            >
+              <GripVertical className="h-4 w-4" />
+            </Button>
             <Button
               variant="ghost"
               size="icon"
@@ -479,6 +532,18 @@ export default function VistaMesPage() {
         </div>
       </div>
 
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragEnd={(event) => {
+          const { active, over } = event;
+          if (!over || active.id === over.id) return;
+          const oldIndex = sortedWidgets.findIndex((w) => w.id === active.id);
+          const newIndex = sortedWidgets.findIndex((w) => w.id === over.id);
+          if (oldIndex !== -1 && newIndex !== -1) reorderWidgets(oldIndex, newIndex);
+        }}
+      >
+      <SortableContext items={sortedWidgets.map((w) => w.id)} strategy={verticalListSortingStrategy}>
       <div className={cn(layoutMode === "two-column" ? "grid grid-cols-2 gap-3" : "space-y-3")}>
         {sortedWidgets.map((w, idx) => {
           if (!w.enabled) return null;
@@ -486,7 +551,9 @@ export default function VistaMesPage() {
           const wrapperClass = layoutMode === "two-column" && isFullWidth ? "col-span-2" : "";
 
           if (w.id === "balance") return (
-            <div key={w.id} className={wrapperClass}>
+            <SortableWidgetWrapper key={w.id} id={w.id} reorderMode={reorderMode}>
+            <div className={wrapperClass}>
+              {reorderMode && <div className="text-xs text-primary text-center py-1 font-medium">Arrastrar para reordenar</div>}
               <MetricCard
                 title="Disponible"
                 value={`${available.available >= 0 ? "+" : ""}${available.available.toFixed(2)}`}
@@ -494,10 +561,101 @@ export default function VistaMesPage() {
                 colorClass={available.available >= 0 ? "text-income" : "text-expense"}
                 bgClass={available.available >= 0 ? "card-income" : "card-expense"}
                 delay={0}
-                onClick={handleDisponibleClick}
+                onClick={reorderMode ? undefined : handleDisponibleClick}
                 subtitle="Toca para ver el detalle"
               />
             </div>
+            </SortableWidgetWrapper>
+          );
+
+          if (w.id === "income") return (
+            <SortableWidgetWrapper key={w.id} id={w.id} reorderMode={reorderMode}>
+            <div className={wrapperClass}>
+              {reorderMode && <div className="text-xs text-primary text-center py-1 font-medium">Arrastrar para reordenar</div>}
+              <MetricCard
+                title="Ingresos"
+                value={`+${available.income.toFixed(2)}`}
+                icon={TrendingUp}
+                colorClass="text-income"
+                bgClass="card-income"
+                delay={100}
+                onClick={reorderMode ? undefined : handleIncomeClick}
+                subtitle={available.salaryIncome > 0 && available.extraIncome > 0 ? "Nomina + extras" : available.salaryIncome > 0 ? "Nomina" : "Extras"}
+              />
+            </div>
+            </SortableWidgetWrapper>
+          );
+
+          if (w.id === "expenses") return (
+            <SortableWidgetWrapper key={w.id} id={w.id} reorderMode={reorderMode}>
+            <div className={wrapperClass}>
+              {reorderMode && <div className="text-xs text-primary text-center py-1 font-medium">Arrastrar para reordenar</div>}
+              <MetricCard
+                title="Gastos variables"
+                value={`-${variableExpenses.toFixed(2)}`}
+                icon={TrendingDown}
+                colorClass="text-expense"
+                bgClass="card-expense"
+                delay={150}
+                onClick={reorderMode ? undefined : handleExpensesClick}
+                subtitle="Ver movimientos del mes"
+              />
+            </div>
+            </SortableWidgetWrapper>
+          );
+
+          if (w.id === "savings") return (
+            <SortableWidgetWrapper key={w.id} id={w.id} reorderMode={reorderMode}>
+            <div className={wrapperClass}>
+              {reorderMode && <div className="text-xs text-primary text-center py-1 font-medium">Arrastrar para reordenar</div>}
+              <MetricCard
+                title="Ahorro general"
+                value={`+${savingsSummary.totalSaved.toFixed(2)}`}
+                icon={PiggyBank}
+                colorClass="text-savings"
+                bgClass="card-savings"
+                delay={200}
+                onClick={reorderMode ? undefined : handleGeneralSavingsClick}
+                subtitle={savingsSummary.totalTarget > 0 ? `${savingsSummary.overallProgress.toFixed(0)}% del objetivo` : "Toca para ver detalle"}
+                disabled={!savingsBreakdownHasAny}
+              />
+            </div>
+            </SortableWidgetWrapper>
+          );
+
+          if (w.id === "monthlySavings") return (
+            <SortableWidgetWrapper key={w.id} id={w.id} reorderMode={reorderMode}>
+            <div className={wrapperClass}>
+              {reorderMode && <div className="text-xs text-primary text-center py-1 font-medium">Arrastrar para reordenar</div>}
+              <MetricCard
+                title="Ahorro del mes"
+                value={`+${monthlySavings.totalForMonth.toFixed(2)}`}
+                icon={CalendarCheck}
+                colorClass="text-savings"
+                bgClass="card-savings"
+                delay={220}
+                onClick={reorderMode ? undefined : handleMonthlySavingsClick}
+                subtitle={monthlySavings.planned > 0 ? `Plan: ${monthlySavings.planned.toFixed(2)}` : "Confirmar ahorro del mes"}
+              />
+            </div>
+            </SortableWidgetWrapper>
+          );
+
+          if (w.id === "obligations") return (
+            <SortableWidgetWrapper key={w.id} id={w.id} reorderMode={reorderMode}>
+            <div className={wrapperClass}>
+              {reorderMode && <div className="text-xs text-primary text-center py-1 font-medium">Arrastrar para reordenar</div>}
+              <MetricCard
+                title="Gastos total"
+                value={`-${totalObligations.toFixed(2)}`}
+                icon={ListChecks}
+                colorClass="text-warning"
+                bgClass="bg-warning/10 border-warning/20"
+                delay={250}
+                subtitle="Variables + fijos + aplazados + provisiones"
+              />
+            </div>
+            </SortableWidgetWrapper>
           );
 
           if (w.id === "income") return (
@@ -564,7 +722,7 @@ export default function VistaMesPage() {
           if (w.id === "obligations") return (
             <div key={w.id} className={wrapperClass}>
               <MetricCard
-                title="Total obligaciones"
+                title="Gastos total"
                 value={`-${totalObligations.toFixed(2)}`}
                 icon={ListChecks}
                 colorClass="text-warning"
@@ -576,7 +734,9 @@ export default function VistaMesPage() {
           );
 
           if (w.id === "savingsPlan") return (
-            <div key={w.id} className={wrapperClass}>
+            <SortableWidgetWrapper key={w.id} id={w.id} reorderMode={reorderMode}>
+            <div className={wrapperClass}>
+              {reorderMode && <div className="text-xs text-primary text-center py-1 font-medium">Arrastrar para reordenar</div>}
               <PayrollStatusCard
                 monthName={monthName}
                 salaryEnabled={salaryEnabled}
@@ -589,10 +749,13 @@ export default function VistaMesPage() {
                 hasConfig={!!salaryConfig?.updatedAt}
               />
             </div>
+            </SortableWidgetWrapper>
           );
 
           if (w.id === "detail") return (
-            <div key={w.id} className={wrapperClass}>
+            <SortableWidgetWrapper key={w.id} id={w.id} reorderMode={reorderMode}>
+            <div className={wrapperClass}>
+              {reorderMode && <div className="text-xs text-primary text-center py-1 font-medium">Arrastrar para reordenar</div>}
               {recentTransactions.length > 0 && (
                 <Card className="overflow-hidden animate-fade-in" style={{ animationDelay: "350ms" }}>
                   <CardContent className="p-4">
@@ -622,12 +785,14 @@ export default function VistaMesPage() {
                 </Card>
               )}
             </div>
+            </SortableWidgetWrapper>
           );
 
           if (w.kind === "chart" && w.chartId) {
             const chart = dashboardConfig.charts.find((c) => c.id === w.chartId);
             if (!chart) return null;
-            const cData = getChartData(chart.dataSource, {
+            const sources: ChartDataSource[] = (chart as any).dataSources ?? [chart.dataSource];
+            const cData = getChartData(sources, {
               transactions: transactions ?? [],
               categories: categories ?? [],
               fixedExpenses: fixedExpenses ?? [],
@@ -635,7 +800,9 @@ export default function VistaMesPage() {
               deferredPayments: deferredPayments ?? [],
             });
             return (
-              <div key={w.id} className={wrapperClass}>
+              <SortableWidgetWrapper key={w.id} id={w.id} reorderMode={reorderMode}>
+              <div className={wrapperClass}>
+                {reorderMode && <div className="text-xs text-primary text-center py-1 font-medium">Arrastrar para reordenar</div>}
                 <Card className="overflow-hidden animate-fade-in" style={{ borderColor: chart.accentColor + "30" }}>
                   <CardContent className="p-4">
                     <div className="mb-4 flex items-start justify-between gap-3">
@@ -651,12 +818,15 @@ export default function VistaMesPage() {
                   </CardContent>
                 </Card>
               </div>
+              </SortableWidgetWrapper>
             );
           }
 
           return null;
         })}
       </div>
+      </SortableContext>
+      </DndContext>
 
       {dashboardConfig.charts.length === 0 && (
         <Card className="overflow-hidden animate-fade-in">
