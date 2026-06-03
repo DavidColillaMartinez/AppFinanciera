@@ -8,6 +8,11 @@
 
 - The official data source is the **app Google Sheet template / connected Google
   Sheet**. The Sheet is the database; the app owns the business logic.
+- The official template resides at the Google Spreadsheet ID stored in
+  `NEXT_PUBLIC_TEMPLATE_SPREADSHEET_ID` (fallback:
+  `1NQk-eJkPgE46V1sbe0KQ67_ZkUcfvdv-RXN99r-mZXc`). The app copies the template
+  to the user's Google Drive using the `https://www.googleapis.com/auth/drive.file`
+  OAuth scope. The copy is private to the user.
 - Google Apps Script is not required.
 - All calculations live in TypeScript. The Sheet stores structured data only.
 - The app validates the connected Sheet by structure (sheet names, headers,
@@ -556,10 +561,13 @@ required structure is present. Visual formatting is irrelevant.
 - Phase 9 — forms and movement flows — **implemented**.
 - Phase 10 — Google session and Sheet connection recovery — **implemented**.
 - Phase 11 — UI / design polish — implemented.
-- Phase 12 — emergency functional repair and mobile responsive sweep — pending.
+- Phase 12 — emergency functional repair and mobile responsive sweep — **implemented**.
+- Phase 12.1.1 — fix failed core flow repairs with real acceptance tests — **implemented**.
+- Phase 12.1.2 — final core flow fixes — **implemented**.
+- Phase 12.X — professional Google Drive template creation flow — **implemented**.
 
 Full phase details, files touched and conventions: `docs/FINANCE_IMPLEMENTATION.md`.
 
 ## 15. Next phase pointer
 
-**Phase 12 — emergency functional repair and mobile responsive sweep.**
+Phase 12.X — Professional Google Drive template creation flow — implemented.

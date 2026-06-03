@@ -568,6 +568,39 @@ live in `docs/FINANCE_AUDIT.md`.
 
 ---
 
+## Phase 12.3.2 — Savings planning accuracy and pause/reactivate — `implemented`
+
+- **Purpose**: Replace `avgTarget` proxy with real capacity in dashboard difficulty
+  warnings; add pause/reactivate quick action in `/savings`; add optional
+  `availableCapacity` prop to forms to reduce duplicated `useFinanceSummary`.
+- **Main files**:
+  - `src/components/dashboard/general-savings-breakdown-modal.tsx` — Added
+    `availableCapacity` prop. Removed `avgTarget` proxy from `warningCount`.
+    Uses real capacity from parent. Shows neutral message when capacity is 0
+    instead of false warnings.
+  - `src/app/page.tsx` — Computes `capacidadAhorro` using the same formula as
+    forms (`income − totalObligations`). Passes as `availableCapacity` to modal.
+  - `src/app/savings/page.tsx` — Added `useUpdateReserve`, `useUpdateGoal`,
+    `useUpdateFuturePayment` hooks. Added `handleTogglePause` handler. Added
+    pause (Pause icon) / reactivate (Play icon) buttons to reserve, goal and
+    future payment cards.
+  - `src/features/goals/components/goal-form.tsx` — Added optional
+    `availableCapacity` prop. If provided, skips internal `useFinanceSummary`.
+    Falls back to internal call when prop is undefined.
+  - `src/features/reserves/components/reserve-form.tsx` — Same optional prop.
+  - `src/features/future-payments/components/future-payment-form.tsx` — Same
+    optional prop.
+- **Key conventions**:
+  - Dashboard difficulty uses `availableCapacity = income − totalObligations`
+    (same as forms). Computed once in `page.tsx`.
+  - `warningCount = -1` when capacity is 0; UI shows neutral message instead.
+  - Forms accept `availableCapacity` from parent but fall back to internal
+    `useFinanceSummary` when standalone.
+  - Pause/reactivate passes only required fields to update mutations
+    (`nombre`, `tipo`, `importeObjetivo`, `estado`).
+
+---
+
 - **Purpose**: Add estado/priority/date fields to savings targets, rename salary
   widget, clean up forms, add direct savings quick action.
 - **Main files**:
@@ -740,6 +773,43 @@ live in `docs/FINANCE_AUDIT.md`.
 
 ---
 
+## Phase 12.4 — Real dashboard customization — `implemented`
+
+- **Purpose**: Unify built-in widgets and chart widgets into a single ordered
+  list. Add layout mode (one/two columns). Render all charts as widgets. Add
+  number count-up animation. Migrate old persisted config.
+- **Main files**:
+  - `src/stores/app-store.ts` — New `DashboardWidgetItem` type with `kind`,
+    `enabled`, `order`, `chartId`. New `layoutMode` field on `DashboardConfig`.
+    Version bumped to 4 with `onRehydrateStorage` migration that converts old
+    `{ id, visible }` widgets to `{ id, kind, enabled, order }` model and adds
+    chart widget entries. New actions: `setLayoutMode`, `toggleWidgetEnabled`.
+    `addChart` now also pushes a widget entry. `removeChart` removes the
+    corresponding widget entry.
+  - `src/components/dashboard/dashboard-customizer.tsx` — Unified widget list
+    showing built-in and chart widgets sorted by order. Layout mode toggle
+    (1 columna / 2 columnas). Visibility toggles use Eye/EyeOff icons with
+    "Visible"/"Oculto" labels. Up/down arrows for reorder. Chart create/edit
+    inline. Edit/delete buttons on each chart widget.
+  - `src/app/page.tsx` — Dashboard renders by iterating `sortedWidgets`.
+    Each widget ID maps to its component (MetricCard, PayrollStatusCard,
+    chart, detail). Charts render all enabled chart widgets, not just the
+    first. Layout mode CSS: `space-y-3` for single, `grid grid-cols-2 gap-3`
+    for two-column; full-width widgets get `col-span-2`. New `AnimatedNumber`
+    component that count-up animates numbers with `requestAnimationFrame`,
+    respects `prefers-reduced-motion`.
+- **Key conventions**:
+  - `widgets` array is the single source of truth for what appears and in
+    what order. Charts are included as widgets with `kind: "chart"` and a
+    `chartId` reference.
+  - Layout mode is persisted as `layoutMode: "single" | "two-column"`.
+  - Migration runs in `onRehydrateStorage`: detects old format by checking
+    `"visible" in firstWidget`, converts to new format, appends chart widgets.
+  - `AnimatedNumber` uses `requestAnimationFrame` with 600ms duration and
+    checks `prefers-reduced-motion` to skip animation.
+
+---
+
 | Phase | Topic | Status |
 |-------|-------|--------|
 | 3 | Template / schema / validation | implemented |
@@ -757,5 +827,7 @@ live in `docs/FINANCE_AUDIT.md`.
 | 12.1.2 | Final core flow fixes: Disponible detail, salary detection, delete fix | implemented |
 | 12.3 | Advanced savings planning: estado/priority/dates, widget rename, forms | implemented |
 | 12.3.1 | Savings planning UI polish: difficulty badge, date UX, priority display | implemented |
+| 12.3.2 | Savings accuracy: dashboard real capacity, pause/reactivate, form prop cleanup | implemented |
 | 12.X | Professional Google Sheet creation flow (revised: programmatic creation) | implemented |
 | 12.X.1 | Fix Google logout + persist auto-created Sheet URL | implemented |
+| 12.4 | Real dashboard customization: unified widgets, layout, chart-as-widget | implemented |
