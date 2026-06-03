@@ -402,43 +402,70 @@ live in `docs/FINANCE_AUDIT.md`.
   - `src/app/fixed-expenses/confirm/page.tsx`
 - **See**: `FINANCE_AUDIT.md` A11, A14.
 
-## Phase 12 — Emergency functional repair and mobile responsive sweep — `pending`
+## Phase 12 — Emergency functional repair and mobile responsive sweep — `implemented`
 
 - **Purpose**: fix the critical functional bugs discovered during the mobile
   audit (account starting balance not reflected, account form missing `rol`,
-  `saldoActualManual` shown in the UI), tighten form feedback, and repair
-  the mobile responsive layout across the app.
-- **Main files** (in progress):
+  `saldoActualManual` shown in the UI, session/connected loop, quota
+  handling, concepto optional, salary detection, metodo default, transfer
+  flow, recent movements), tighten form feedback, and repair the mobile
+  responsive layout across the app.
+- **Main files** (Phase 12.0):
   - `src/lib/finance/account-balances.ts` — new. `computeAccountBalance` and
     `computeAllAccountBalances` derive account balances from `saldoInicial`
     plus the matching `Movimientos` rows (Ingreso adds to `cuentaDestino`,
     Gasto subtracts from `cuentaOrigen`, Transferencia interna moves between
-    accounts).
+    accounts). Exported from `src/lib/finance/index.ts`.
   - `src/lib/finance/index.ts` — re-exports the new module.
   - `src/app/accounts/page.tsx` — `AccountForm` now includes a `rol`
     selector, removes the `saldoActualManual` input, and shows the
     calculated balance on the card. Delete uses `ConfirmDialog` instead of
-    `window.confirm`. Mobile layout: `grid-cols-1 sm:grid-cols-2` for
-    paired fields, sticky bottom action bar, `pb-24` to clear the bottom
-    nav.
+    `window.confirm`. Toast feedback on save. Mobile layout:
+    `grid-cols-1 sm:grid-cols-2` for paired fields, sticky bottom action
+    bar, `pb-24` to clear the bottom nav.
   - `src/app/settings/page.tsx` — category create / edit and seed actions
     use `ConfirmDialog` instead of `window.confirm`. Toast feedback on
     success. Mobile layout: `flex-col sm:flex-row` for the action row.
   - `docs/FINANCE_LOGIC.md` §7.1 — new compact rule that codifies the
     account balance formula and explains why `Mov_reservas` rows do not
     change account balances.
-  - (next) `use-accounts.ts` and `use-categories.ts` — drop the
-    `["transactions"]` invalidation from create / update / delete. Add
-    `staleTime: 30_000` to all stable sheet reads.
-  - (next) mobile responsive sweep: every page with `grid-cols-2/3/4`
-    without a `sm:` breakpoint, every form without a sticky action bar, and
-    every list page without `pb-24`.
+- **Main files** (Phase 12.1):
+  - `src/components/states/empty-state.tsx` — added `secondaryAction` prop
+    for "Desconectar hoja" escape from stuck connected state.
+  - `src/app/page.tsx` — expired session empty state now shows both
+    "Reconectar Google" and "Desconectar hoja" so users can break out of
+    a stuck connected-dashboard loop.
+  - `src/lib/query-client.ts` — 429 is no longer treated as auth error.
+    Both queries and mutations stop retrying on `SheetsApiError.isQuotaError()`.
+    No logout, no redirect.
+  - `src/constants/payment-methods.ts` — `normalizePaymentMethod` now returns
+    `DEFAULT_PAYMENT_METHOD` (Tarjeta) when input is empty, so the form
+    always has a non-empty value for Gasto metodo.
+  - `src/schemas/transaction.ts` — `concepto` is optional for create
+    (`.partial({ concepto: true })`). `superRefine` enforces required
+    concept per type as needed.
+  - `src/components/dashboard/disponible-explanation-modal.tsx` — new props
+    `salaryType` and `variableSalarySaved`. Warning changes based on fixed
+    (amount > 0) vs variable (configured, no month amount yet).
+  - `src/features/transactions/hooks/use-transactions.ts` — create/update/delete
+    mutations invalidate `["accounts"]` so account balances refresh
+    immediately. Dropped unnecessary `savingsLedger`/`reserves`/`goals`
+    cascade invalidations.
+  - `src/features/salary/hooks/use-salary.ts` — `useSalaryConfig` has
+    `staleTime: 30_000`.
 - **Key conventions**:
   - `saldoActualManual` is kept in the schema (legacy reads) but is no
     longer exposed in the UI. The card shows the calculated balance.
   - Account role values are the same four from §7: `diario`, `fijos`,
     `ahorro`, `general`. The form defaults to `general` to match the
     `rowToAccount` fallback.
+  - 429 is a quota error, not an auth error. It should not trigger logout
+    or onboarding redirect.
+  - `concepto` is optional for create; the form Select for metodo always
+    has Tarjeta as the default so schema validation passes without
+    explicit user selection.
+  - Transaction mutations only invalidate accounts (for balance update)
+    and transactions. They do not cascade to reserves/goals/savingsLedger.
 
 ---
 
@@ -456,4 +483,4 @@ live in `docs/FINANCE_AUDIT.md`.
 | 9 | Forms and movement flows | implemented |
 | 10 | Google session and Sheet connection recovery | implemented |
 | 11 | UI / design polish | implemented |
-| 12 | Emergency functional repair + mobile responsive sweep | pending |
+| 12 | Emergency functional repair + mobile responsive sweep | implemented |
