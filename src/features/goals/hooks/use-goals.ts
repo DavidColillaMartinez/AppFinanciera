@@ -16,6 +16,7 @@ const GOAL_HEADERS = [
   "tipo",
   "cuentaAhorro",
   "importeObjetivo",
+  "fechaInicio",
   "fechaObjetivo",
   "prioridad",
   "saldoActual",
@@ -34,6 +35,7 @@ function rowToGoal(row: Record<string, string>): GoalRow {
     tipo: (row.tipo as GoalRow["tipo"]) ?? "Otro",
     cuentaAhorro: row.cuentaAhorro ?? "",
     importeObjetivo: Number(row.importeObjetivo) || 0,
+    fechaInicio: row.fechaInicio ?? "",
     fechaObjetivo: row.fechaObjetivo ?? "",
     prioridad: (row.prioridad as GoalRow["prioridad"]) ?? "Media",
     saldoActual: Number(row.saldoActual) || 0,
@@ -71,9 +73,11 @@ export function useCreateGoal(sheetId: string | null) {
       nombre: string;
       tipo: string;
       importeObjetivo: number;
+      fechaInicio?: string;
       fechaObjetivo?: string;
       prioridad?: string;
       cuentaAhorro?: string;
+      estado?: string;
       notas?: string;
     }) => {
       if (!sheetId) throw new Error("No sheet connected");
@@ -87,12 +91,13 @@ export function useCreateGoal(sheetId: string | null) {
         tipo: data.tipo as GoalRow["tipo"],
         cuentaAhorro: data.cuentaAhorro ?? "",
         importeObjetivo: data.importeObjetivo,
+        fechaInicio: data.fechaInicio ?? "",
         fechaObjetivo: data.fechaObjetivo ?? "",
         prioridad: (data.prioridad ?? "Media") as GoalRow["prioridad"],
         saldoActual: 0,
         mesesRestantes: 0,
         aporteMensual: 0,
-        estado: "Activo" as const,
+        estado: (data.estado ?? "Activo") as GoalRow["estado"],
         notas: data.notas ?? "",
         createdAt: now,
         updatedAt: now,
@@ -123,6 +128,7 @@ export function useUpdateGoal(sheetId: string | null) {
       nombre: string;
       tipo: string;
       importeObjetivo: number;
+      fechaInicio?: string;
       fechaObjetivo?: string;
       prioridad?: string;
       cuentaAhorro?: string;
@@ -149,6 +155,7 @@ export function useUpdateGoal(sheetId: string | null) {
         nombre: data.nombre,
         tipo: data.tipo as GoalRow["tipo"],
         importeObjetivo: data.importeObjetivo,
+        fechaInicio: data.fechaInicio ?? "",
         fechaObjetivo: data.fechaObjetivo ?? "",
         prioridad: (data.prioridad ?? "Media") as GoalRow["prioridad"],
         cuentaAhorro: data.cuentaAhorro ?? "",

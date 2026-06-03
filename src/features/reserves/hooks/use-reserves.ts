@@ -9,6 +9,7 @@ import {
   getToken,
 } from "@/lib/sheets/writer";
 import type { ReserveRow } from "@/types/models";
+import type { GenericStatus } from "@/constants/enums";
 import { nowISO } from "@/lib/sheets/adapters";
 
 const RESERVA_HEADERS = [
@@ -21,12 +22,19 @@ const RESERVA_HEADERS = [
   "cuentaFisica",
   "activo",
   "prioridad",
+  "estado",
+  "fechaInicio",
+  "fechaObjetivo",
   "notas",
   "createdAt",
   "updatedAt",
 ] as const;
 
 function rowToReserve(row: Record<string, string>): ReserveRow {
+  const rawEstado = (row.estado ?? "").trim();
+  const estado: GenericStatus = rawEstado
+    ? (rawEstado as GenericStatus)
+    : (row.activo === "S" ? "Activo" : "Pausado");
   return {
     reservaId: row.reservaId ?? "",
     nombre: row.nombre ?? "",
@@ -36,7 +44,10 @@ function rowToReserve(row: Record<string, string>): ReserveRow {
     aporteMensualSugerido: Number(row.aporteMensualSugerido) || 0,
     cuentaFisica: row.cuentaFisica ?? "",
     activo: (row.activo as ReserveRow["activo"]) ?? "S",
+    estado,
     prioridad: (row.prioridad as ReserveRow["prioridad"]) ?? "Media",
+    fechaInicio: row.fechaInicio ?? "",
+    fechaObjetivo: row.fechaObjetivo ?? "",
     notas: row.notas ?? "",
     createdAt: row.createdAt ?? "",
     updatedAt: row.updatedAt ?? "",
@@ -53,7 +64,7 @@ export function useReserves(sheetId: string | null) {
         SHEET_NAMES.RESERVAS,
         rowToReserve,
       );
-      return rows.filter((r) => r.reservaId && r.activo === "S");
+      return rows.filter((r) => r.reservaId && r.estado !== "Cancelado");
     },
     enabled: !!sheetId,
     staleTime: 30_000,
@@ -72,6 +83,9 @@ export function useCreateReserve(sheetId: string | null) {
       aporteMensualSugerido?: number;
       cuentaFisica?: string;
       prioridad?: string;
+      estado?: string;
+      fechaInicio?: string;
+      fechaObjetivo?: string;
       notas?: string;
     }) => {
       if (!sheetId) throw new Error("No sheet connected");
@@ -89,6 +103,9 @@ export function useCreateReserve(sheetId: string | null) {
         cuentaFisica: data.cuentaFisica ?? "",
         activo: "S" as const,
         prioridad: (data.prioridad ?? "Media") as ReserveRow["prioridad"],
+        estado: (data.estado ?? "Activo") as ReserveRow["estado"],
+        fechaInicio: data.fechaInicio ?? "",
+        fechaObjetivo: data.fechaObjetivo ?? "",
         notas: data.notas ?? "",
         createdAt: now,
         updatedAt: now,
@@ -121,6 +138,9 @@ export function useUpdateReserve(sheetId: string | null) {
       aporteMensualSugerido?: number;
       cuentaFisica?: string;
       prioridad?: string;
+      estado?: string;
+      fechaInicio?: string;
+      fechaObjetivo?: string;
       notas?: string;
     }) => {
       if (!sheetId) throw new Error("No sheet connected");
@@ -145,6 +165,9 @@ export function useUpdateReserve(sheetId: string | null) {
         aporteMensualSugerido: data.aporteMensualSugerido ?? 0,
         cuentaFisica: data.cuentaFisica ?? "",
         prioridad: (data.prioridad ?? "Media") as ReserveRow["prioridad"],
+        estado: (data.estado ?? "Activo") as ReserveRow["estado"],
+        fechaInicio: data.fechaInicio ?? "",
+        fechaObjetivo: data.fechaObjetivo ?? "",
         notas: data.notas ?? "",
         updatedAt: now,
       };
@@ -185,7 +208,7 @@ export function useDeleteReserve(sheetId: string | null) {
         sheetId,
         SHEET_NAMES.RESERVAS,
         rowIndex,
-        { activo: "N", updatedAt: nowISO() },
+        { estado: "Cancelado", activo: "N", updatedAt: nowISO() },
         token,
       );
     },

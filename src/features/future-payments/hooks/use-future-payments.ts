@@ -8,9 +8,14 @@ import {
   getToken,
 } from "@/lib/sheets/writer";
 import type { FuturePaymentRow } from "@/types/models";
+import type { GenericStatus } from "@/constants/enums";
 import { nowISO } from "@/lib/sheets/adapters";
 
 function rowToFuturePayment(row: Record<string, string>): FuturePaymentRow {
+  const rawEstado = (row.estado ?? "").trim();
+  const estado: GenericStatus = rawEstado
+    ? (rawEstado as GenericStatus)
+    : (row.activo === "S" ? "Activo" : "Pausado");
   return {
     pagoId: row.pagoId ?? "",
     concepto: row.concepto ?? "",
@@ -20,6 +25,9 @@ function rowToFuturePayment(row: Record<string, string>): FuturePaymentRow {
     frecuencia: (row.frecuencia as FuturePaymentRow["frecuencia"]) ?? "Mensual",
     cuentaReserva: row.cuentaReserva ?? "",
     activo: (row.activo as FuturePaymentRow["activo"]) ?? "S",
+    estado,
+    prioridad: (row.prioridad as FuturePaymentRow["prioridad"]) ?? "Media",
+    fechaInicio: row.fechaInicio ?? "",
     saldoReservado: Number(row.saldoReservado) || 0,
     mesesRestantes: Number(row.mesesRestantes) || 0,
     aporteMensual: Number(row.aporteMensual) || 0,
@@ -39,7 +47,7 @@ export function useFuturePayments(sheetId: string | null) {
         SHEET_NAMES.PAGOS_FUTUROS,
         rowToFuturePayment,
       );
-      return rows.filter((r) => r.pagoId && r.activo === "S");
+      return rows.filter((r) => r.pagoId && r.estado !== "Cancelado");
     },
     enabled: !!sheetId,
     staleTime: 30_000,
@@ -57,6 +65,8 @@ export function useCreateFuturePayment(sheetId: string | null) {
       fechaVencimiento?: string;
       frecuencia?: string;
       cuentaReserva?: string;
+      prioridad?: string;
+      fechaInicio?: string;
       notas?: string;
     }) => {
       if (!sheetId) throw new Error("No sheet connected");
@@ -73,6 +83,9 @@ export function useCreateFuturePayment(sheetId: string | null) {
         frecuencia: data.frecuencia ?? "Mensual",
         cuentaReserva: data.cuentaReserva ?? "",
         activo: "S" as const,
+        estado: "Activo" as const,
+        prioridad: (data.prioridad ?? "Media") as FuturePaymentRow["prioridad"],
+        fechaInicio: data.fechaInicio ?? "",
         saldoReservado: 0,
         mesesRestantes: 0,
         aporteMensual: 0,
@@ -109,6 +122,9 @@ export function useUpdateFuturePayment(sheetId: string | null) {
       fechaVencimiento?: string;
       frecuencia?: string;
       cuentaReserva?: string;
+      prioridad?: string;
+      estado?: string;
+      fechaInicio?: string;
       saldoReservado?: number;
       mesesRestantes?: number;
       aporteMensual?: number;
@@ -136,6 +152,9 @@ export function useUpdateFuturePayment(sheetId: string | null) {
         fechaVencimiento: data.fechaVencimiento ?? "",
         frecuencia: data.frecuencia ?? "Mensual",
         cuentaReserva: data.cuentaReserva ?? "",
+        prioridad: (data.prioridad ?? "Media") as FuturePaymentRow["prioridad"],
+        estado: (data.estado ?? "Activo") as FuturePaymentRow["estado"],
+        fechaInicio: data.fechaInicio ?? "",
         saldoReservado: data.saldoReservado ?? 0,
         mesesRestantes: data.mesesRestantes ?? 0,
         aporteMensual: data.aporteMensual ?? 0,
@@ -180,7 +199,7 @@ export function useDeleteFuturePayment(sheetId: string | null) {
         sheetId,
         SHEET_NAMES.PAGOS_FUTUROS,
         rowIndex,
-        { activo: "N", updatedAt: nowISO() },
+        { estado: "Cancelado", activo: "N", updatedAt: nowISO() },
         token,
       );
     },

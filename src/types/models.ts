@@ -93,6 +93,9 @@ export interface FuturePaymentRow {
   frecuencia: Frequency;
   cuentaReserva: string;
   activo: "S" | "N";
+  estado: GenericStatus;
+  prioridad: Priority;
+  fechaInicio: string;
   saldoReservado: number;
   mesesRestantes: number;
   aporteMensual: number;
@@ -107,6 +110,7 @@ export interface GoalRow {
   tipo: GoalType;
   cuentaAhorro: string;
   importeObjetivo: number;
+  fechaInicio: string;
   fechaObjetivo: string;
   prioridad: Priority;
   saldoActual: number;
@@ -127,7 +131,10 @@ export interface ReserveRow {
   aporteMensualSugerido: number;
   cuentaFisica: string;
   activo: "S" | "N";
+  estado: GenericStatus;
   prioridad: Priority;
+  fechaInicio: string;
+  fechaObjetivo: string;
   notas: string;
   createdAt: string;
   updatedAt: string;

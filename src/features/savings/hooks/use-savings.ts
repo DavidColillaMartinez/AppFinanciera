@@ -242,6 +242,8 @@ export interface PlannedTarget {
   tipoLabel: string;
   importeObjetivo: number;
   monthlyRecommended: number;
+  prioridad?: string;
+  estado?: string;
 }
 
 export interface PlannedTargetWithStatus extends PlannedTarget {
@@ -260,7 +262,9 @@ export function usePlannedMonthlyTargets(
       tipo: string;
       importeObjetivo: number;
       aporteMensualSugerido: number;
-      activo: string;
+      estado: string;
+      prioridad?: string;
+      fechaInicio?: string;
     }>;
     goals?: Array<{
       objetivoId: string;
@@ -269,20 +273,24 @@ export function usePlannedMonthlyTargets(
       importeObjetivo: number;
       aporteMensual: number;
       estado: string;
+      prioridad?: string;
+      fechaInicio?: string;
     }>;
     futurePayments?: Array<{
       pagoId: string;
       concepto: string;
       importeObjetivo: number;
       aporteMensual: number;
-      activo: string;
+      estado: string;
+      prioridad?: string;
+      fechaInicio?: string;
     }>;
   },
 ) {
   const targets: PlannedTarget[] = [];
 
   for (const r of options?.reserves ?? []) {
-    if (r.activo !== "S") continue;
+    if (r.estado !== "Activo") continue;
     if (r.aporteMensualSugerido <= 0) continue;
     targets.push({
       tipoDestino: TipoDestinoReserva.RESERVA,
@@ -292,6 +300,8 @@ export function usePlannedMonthlyTargets(
       tipoLabel: r.tipo,
       importeObjetivo: r.importeObjetivo,
       monthlyRecommended: r.aporteMensualSugerido,
+      prioridad: r.prioridad,
+      estado: r.estado,
     });
   }
 
@@ -306,11 +316,13 @@ export function usePlannedMonthlyTargets(
       tipoLabel: g.tipo,
       importeObjetivo: g.importeObjetivo,
       monthlyRecommended: g.aporteMensual,
+      prioridad: g.prioridad,
+      estado: g.estado,
     });
   }
 
   for (const f of options?.futurePayments ?? []) {
-    if (f.activo !== "S") continue;
+    if (f.estado !== "Activo") continue;
     if (f.aporteMensual <= 0) continue;
     targets.push({
       tipoDestino: TipoDestinoReserva.PAGO_FUTURO,
@@ -320,6 +332,8 @@ export function usePlannedMonthlyTargets(
       tipoLabel: "Pago futuro",
       importeObjetivo: f.importeObjetivo,
       monthlyRecommended: f.aporteMensual,
+      prioridad: f.prioridad,
+      estado: f.estado,
     });
   }
 

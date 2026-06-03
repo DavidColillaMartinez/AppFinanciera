@@ -9,7 +9,11 @@ import type {
   GoalRow,
   ReserveMovementRow,
 } from "@/types/models";
-import { TipoDestinoReserva, TipoMovimientoReserva, TransactionType } from "@/constants/enums";
+import {
+  TipoDestinoReserva,
+  TipoMovimientoReserva,
+  TransactionType,
+} from "@/constants/enums";
 import { SALARY_MOVEMENT_ID_PREFIX } from "./salary-config";
 import { LEDGER_ID_PREFIX, getActiveMovements } from "./savings-ledger";
 import { computeAllAccountBalances, type AccountBalanceBreakdown } from "./account-balances";
@@ -106,6 +110,13 @@ export interface SavingsTargetDetail {
   remaining: number;
   progressPercent: number;
   monthlyRecommended: number;
+  estado?: string;
+  prioridad?: string;
+  fechaInicio?: string;
+  fechaObjetivo?: string;
+  monthsRemaining?: number;
+  requiredMonthly?: number;
+  dificultad?: "ok" | "tight" | "difficult" | "impossible";
 }
 
 export interface SavingsBreakdown {
@@ -282,7 +293,7 @@ export function getDeferredPayments(ctx: FinanceContext): number {
 
 export function getFuturePaymentProvisions(ctx: FinanceContext): number {
   return ctx.futurePayments
-    .filter((f) => f.activo === "S")
+    .filter((f) => f.estado === "Activo")
     .reduce((sum, f) => {
       if (f.aporteMensual > 0) return sum + f.aporteMensual;
       if (f.mesesRestantes > 0) {
@@ -302,8 +313,13 @@ export function getTotalExpenses(ctx: FinanceContext): number {
   );
 }
 
+function isDateBeforeMonth(dateStr: string, monthKey: string): boolean {
+  if (!dateStr) return true;
+  return dateStr.slice(0, 7) <= monthKey;
+}
+
 function isActiveReserve(r: ReserveRow): boolean {
-  return r.activo === "S";
+  return r.estado === "Activo";
 }
 
 function isActiveGoal(g: GoalRow): boolean {
@@ -311,13 +327,19 @@ function isActiveGoal(g: GoalRow): boolean {
 }
 
 function isActiveFuturePayment(f: FuturePaymentRow): boolean {
-  return f.activo === "S";
+  return f.estado === "Activo";
 }
 
 export function getGeneralSavings(ctx: FinanceContext): SavingsSummary {
-  const reserves = ctx.reserves.filter(isActiveReserve);
-  const goals = ctx.goals.filter(isActiveGoal);
-  const futurePayments = ctx.futurePayments.filter(isActiveFuturePayment);
+  const reserves = ctx.reserves.filter(
+    (r) => isActiveReserve(r) && isDateBeforeMonth(r.fechaInicio, ctx.monthKey),
+  );
+  const goals = ctx.goals.filter(
+    (g) => isActiveGoal(g) && isDateBeforeMonth(g.fechaInicio, ctx.monthKey),
+  );
+  const futurePayments = ctx.futurePayments.filter(
+    (f) => isActiveFuturePayment(f) && isDateBeforeMonth(f.fechaInicio, ctx.monthKey),
+  );
 
   let reservesSaved = 0;
   let reservesTarget = 0;
@@ -417,8 +439,12 @@ export function getMonthlySavings(ctx: FinanceContext): MonthlySavingsBreakdown 
   const totalForMonth = reserva + objetivo + pago_futuro + general;
 
   const planned =
-    ctx.reserves.filter(isActiveReserve).reduce((sum, r) => sum + r.aporteMensualSugerido, 0) +
-    ctx.goals.filter(isActiveGoal).reduce((sum, g) => sum + g.aporteMensual, 0);
+    ctx.reserves
+      .filter((r) => isActiveReserve(r) && isDateBeforeMonth(r.fechaInicio, ctx.monthKey))
+      .reduce((sum, r) => sum + r.aporteMensualSugerido, 0) +
+    ctx.goals
+      .filter((g) => isActiveGoal(g) && isDateBeforeMonth(g.fechaInicio, ctx.monthKey))
+      .reduce((sum, g) => sum + g.aporteMensual, 0);
 
   const executionRatio = planned > 0 ? totalForMonth / planned : 0;
 
@@ -431,13 +457,23 @@ export function getMonthlySavings(ctx: FinanceContext): MonthlySavingsBreakdown 
   };
 }
 
+function computeMonthsRemaining(fechaObjetivo: string, monthKey: string): number {
+  if (!fechaObjetivo) return 0;
+  const [y, m] = monthKey.split("-").map(Number);
+  const [ty, tm] = fechaObjetivo.slice(0, 7).split("-").map(Number);
+  if (!y || !m || !ty || !tm) return 0;
+  return Math.max(0, (ty - y) * 12 + (tm - m));
+}
+
 export function getSavingsBreakdown(ctx: FinanceContext): SavingsBreakdown {
   const reserves: SavingsTargetDetail[] = ctx.reserves
-    .filter(isActiveReserve)
+    .filter((r) => isActiveReserve(r) && isDateBeforeMonth(r.fechaInicio, ctx.monthKey))
     .map((r) => {
       const movements = getReserveMovements(ctx, r.reservaId);
       const saved = computeEffectiveBalance(movements, r.saldoActual);
       const remaining = Math.max(0, r.importeObjetivo - saved);
+      const monthsRemaining = computeMonthsRemaining(r.fechaObjetivo, ctx.monthKey);
+      const requiredMonthly = monthsRemaining > 0 ? remaining / monthsRemaining : 0;
       return {
         id: r.reservaId,
         name: r.nombre,
@@ -449,15 +485,23 @@ export function getSavingsBreakdown(ctx: FinanceContext): SavingsBreakdown {
             ? Math.min((saved / r.importeObjetivo) * 100, 100)
             : 0,
         monthlyRecommended: r.aporteMensualSugerido,
+        estado: r.estado,
+        prioridad: r.prioridad,
+        fechaInicio: r.fechaInicio,
+        fechaObjetivo: r.fechaObjetivo,
+        monthsRemaining,
+        requiredMonthly,
       };
     });
 
   const goals: SavingsTargetDetail[] = ctx.goals
-    .filter(isActiveGoal)
+    .filter((g) => isActiveGoal(g) && isDateBeforeMonth(g.fechaInicio, ctx.monthKey))
     .map((g) => {
       const movements = getGoalMovements(ctx, g.objetivoId);
       const saved = computeEffectiveBalance(movements, g.saldoActual);
       const remaining = Math.max(0, g.importeObjetivo - saved);
+      const monthsRemaining = computeMonthsRemaining(g.fechaObjetivo, ctx.monthKey);
+      const requiredMonthly = monthsRemaining > 0 ? remaining / monthsRemaining : 0;
       return {
         id: g.objetivoId,
         name: g.nombre,
@@ -469,15 +513,23 @@ export function getSavingsBreakdown(ctx: FinanceContext): SavingsBreakdown {
             ? Math.min((saved / g.importeObjetivo) * 100, 100)
             : 0,
         monthlyRecommended: g.aporteMensual,
+        estado: g.estado,
+        prioridad: g.prioridad,
+        fechaInicio: g.fechaInicio,
+        fechaObjetivo: g.fechaObjetivo,
+        monthsRemaining,
+        requiredMonthly,
       };
     });
 
   const futurePayments: SavingsTargetDetail[] = ctx.futurePayments
-    .filter(isActiveFuturePayment)
+    .filter((f) => isActiveFuturePayment(f) && isDateBeforeMonth(f.fechaInicio, ctx.monthKey))
     .map((f) => {
       const movements = getFuturePaymentMovements(ctx, f.pagoId);
       const saved = computeEffectiveBalance(movements, f.saldoReservado);
       const remaining = Math.max(0, f.importeObjetivo - saved);
+      const monthsRemaining = computeMonthsRemaining(f.fechaVencimiento, ctx.monthKey);
+      const requiredMonthly = monthsRemaining > 0 ? remaining / monthsRemaining : 0;
       return {
         id: f.pagoId,
         name: f.concepto,
@@ -489,6 +541,12 @@ export function getSavingsBreakdown(ctx: FinanceContext): SavingsBreakdown {
             ? Math.min((saved / f.importeObjetivo) * 100, 100)
             : 0,
         monthlyRecommended: f.aporteMensual,
+        estado: f.estado,
+        prioridad: f.prioridad,
+        fechaInicio: f.fechaInicio,
+        fechaObjetivo: f.fechaVencimiento,
+        monthsRemaining,
+        requiredMonthly,
       };
     });
 
@@ -673,6 +731,17 @@ export function getGoalProgress(
         : 0,
     monthlyRecommended: goal.aporteMensual,
   };
+}
+
+export function computeSavingsDifficulty(
+  requiredMonthly: number,
+  availableAfterObligations: number,
+): "ok" | "tight" | "difficult" | "impossible" {
+  if (availableAfterObligations <= 0) return "impossible";
+  if (requiredMonthly > availableAfterObligations) return "impossible";
+  if (requiredMonthly > availableAfterObligations * 0.75) return "difficult";
+  if (requiredMonthly > availableAfterObligations * 0.4) return "tight";
+  return "ok";
 }
 
 export function getFuturePaymentProgress(
