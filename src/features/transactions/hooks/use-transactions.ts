@@ -112,6 +112,7 @@ export function useCreateTransaction(sheetId: string | null) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      queryClient.invalidateQueries({ queryKey: ["accounts"] });
     },
   });
 }
@@ -178,10 +179,7 @@ export function useUpdateTransaction(sheetId: string | null) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
-      queryClient.invalidateQueries({ queryKey: ["savingsLedger"] });
-      queryClient.invalidateQueries({ queryKey: ["reserves"] });
-      queryClient.invalidateQueries({ queryKey: ["goals"] });
-      queryClient.invalidateQueries({ queryKey: ["futurePayments"] });
+      queryClient.invalidateQueries({ queryKey: ["accounts"] });
     },
   });
 }
@@ -208,10 +206,7 @@ export function useDeleteTransaction(sheetId: string | null) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
-      queryClient.invalidateQueries({ queryKey: ["savingsLedger"] });
-      queryClient.invalidateQueries({ queryKey: ["reserves"] });
-      queryClient.invalidateQueries({ queryKey: ["goals"] });
-      queryClient.invalidateQueries({ queryKey: ["futurePayments"] });
+      queryClient.invalidateQueries({ queryKey: ["accounts"] });
     },
   });
 }
