@@ -17,10 +17,14 @@ import { useAppStore } from "@/stores/app-store";
 import { SHEET_NAMES } from "@/constants/sheet-structure";
 import { validateSheetCompatibility, readConfig } from "@/lib/sheets/reader";
 import { getToken, hasToken } from "@/lib/sheets/client";
-import { AlertCircle, CheckCircle2, Loader2, Plus } from "lucide-react";
+import { AlertCircle, CheckCircle2, Loader2, Plus, ExternalLink } from "lucide-react";
 import {
   copyTemplateToUserDrive,
   getTemplateSheetIdOrThrow,
+  CopyError,
+  userFacingCopyError,
+  MANUAL_COPY_URL,
+  validateTemplateId,
 } from "@/lib/google/drive";
 
 type Step = "google" | "sheet" | "validating" | "creating" | "done";
@@ -57,6 +61,13 @@ function OnboardingContent() {
         : null,
   );
   const [showManualInput, setShowManualInput] = useState(false);
+  const [driveCopyFailed, setDriveCopyFailed] = useState(false);
+
+  const [templateEnv] = useState<{ valid: boolean; error: string | null }>(() => {
+    const raw = process.env.NEXT_PUBLIC_TEMPLATE_SPREADSHEET_ID;
+    if (!raw) return { valid: true, error: null };
+    return validateTemplateId(raw);
+  });
   const canUseGoogleOAuth = isGoogleAuthConfigured();
 
   useEffect(() => {
@@ -88,6 +99,7 @@ function OnboardingContent() {
 
   async function handleAutoCreate() {
     setError(null);
+    setDriveCopyFailed(false);
     setStep("creating");
 
     try {
@@ -139,7 +151,12 @@ function OnboardingContent() {
       setStep("done");
       router.replace("/");
     } catch (e) {
-      setError((e as Error).message);
+      if (e instanceof CopyError) {
+        setError(userFacingCopyError(e));
+        setDriveCopyFailed(true);
+      } else {
+        setError((e as Error).message);
+      }
       setStep("sheet");
     }
   }
@@ -387,21 +404,66 @@ function OnboardingContent() {
 
         {step === "sheet" && (
           <div className="space-y-4">
-            <Card
-              className="cursor-pointer border-primary/30 hover:border-primary/60 transition-colors"
-              onClick={handleAutoCreate}
-            >
-              <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <Plus className="h-5 w-5 text-primary" />
-                  Crear mi hoja automáticamente
-                </CardTitle>
-                <CardDescription>
-                  Crearemos una copia privada de la plantilla oficial en tu
-                  Google Drive. La hoja será tuya y solo tú tendrás acceso.
-                </CardDescription>
-              </CardHeader>
-            </Card>
+            {templateEnv.valid ? (
+              <Card
+                className="cursor-pointer border-primary/30 hover:border-primary/60 transition-colors"
+                onClick={handleAutoCreate}
+              >
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Plus className="h-5 w-5 text-primary" />
+                    Crear mi hoja automáticamente
+                  </CardTitle>
+                  <CardDescription>
+                    Crearemos una copia privada de la plantilla oficial en tu
+                    Google Drive. La hoja será tuya y solo tú tendrás acceso.
+                  </CardDescription>
+                </CardHeader>
+              </Card>
+            ) : (
+              <Card className="border-yellow-300 bg-yellow-50">
+                <CardHeader>
+                  <CardTitle className="text-sm flex items-center gap-2 text-yellow-800">
+                    <AlertCircle className="h-4 w-4" />
+                    Configuración pendiente
+                  </CardTitle>
+                  <CardDescription className="text-yellow-700">
+                    {templateEnv.error ?? "NEXT_PUBLIC_TEMPLATE_SPREADSHEET_ID no configurado."}
+                    {" "}Conecta una hoja existente o descarga la plantilla.
+                  </CardDescription>
+                </CardHeader>
+              </Card>
+            )}
+
+            {driveCopyFailed && (
+              <Card className="border-blue-300 bg-blue-50">
+                <CardContent className="pt-6 space-y-3">
+                  <p className="text-sm text-blue-900 font-medium">
+                    Crear una copia manual
+                  </p>
+                  <p className="text-xs text-blue-700">
+                    Haz una copia en tu Drive y pega aquí el enlace de la copia.
+                  </p>
+                  <div className="flex flex-col gap-2">
+                    <a
+                      href={MANUAL_COPY_URL}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                      Abrir plantilla para hacer copia manual
+                    </a>
+                    <button
+                      onClick={() => { setShowManualInput(true); setDriveCopyFailed(false); }}
+                      className="text-xs text-center text-muted-foreground hover:text-foreground underline underline-offset-4"
+                    >
+                      Ya tengo la URL de mi copia
+                    </button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             <div className="text-center">
               <button

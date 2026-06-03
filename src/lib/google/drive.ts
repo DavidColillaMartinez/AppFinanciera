@@ -2,28 +2,49 @@
 
 import { getToken } from "@/lib/sheets/client";
 
+export const OFFICIAL_TEMPLATE_ID =
+  "1NQk-eJkPgE46V1sbe0KQ67_ZkUcfvdv-RXN99r-mZXc";
+
+export const OFFICIAL_TEMPLATE_URL = `https://docs.google.com/spreadsheets/d/${OFFICIAL_TEMPLATE_ID}/edit?usp=sharing`;
+
+export const MANUAL_COPY_URL = `https://docs.google.com/spreadsheets/d/${OFFICIAL_TEMPLATE_ID}/copy`;
+
 export interface DriveCopyResult {
   fileId: string;
   name: string;
   webViewLink?: string;
 }
 
-function getTemplateSheetId(): string | null {
-  if (typeof window === "undefined") return null;
-  return (
-    process.env.NEXT_PUBLIC_TEMPLATE_SPREADSHEET_ID ??
-    "1NQk-eJkPgE46V1sbe0KQ67_ZkUcfvdv-RXN99r-mZXc"
-  );
+export interface TemplateIdValidation {
+  valid: boolean;
+  id: string;
+  error: string | null;
+}
+
+export function validateTemplateId(id: string): TemplateIdValidation {
+  const trimmed = id.trim();
+
+  if (!trimmed) {
+    return { valid: false, id: trimmed, error: "Falta configurar la plantilla oficial." };
+  }
+
+  if (!/^[a-zA-Z0-9_-]{20,}$/.test(trimmed)) {
+    return { valid: false, id: trimmed, error: "El ID de la plantilla oficial no es válido." };
+  }
+
+  return { valid: true, id: trimmed, error: null };
 }
 
 export function getTemplateSheetIdOrThrow(): string {
-  const id = getTemplateSheetId();
-  if (!id) {
-    throw new Error(
-      "NEXT_PUBLIC_TEMPLATE_SPREADSHEET_ID no configurado. " +
-        "Añádelo en las variables de entorno de Vercel.",
-    );
+  const raw =
+    process.env.NEXT_PUBLIC_TEMPLATE_SPREADSHEET_ID ?? OFFICIAL_TEMPLATE_ID;
+
+  const { valid, id, error } = validateTemplateId(raw);
+
+  if (!valid) {
+    throw new Error(error ?? "Plantilla oficial no configurada.");
   }
+
   return id;
 }
 
@@ -32,16 +53,17 @@ export async function copyTemplateToUserDrive(
 ): Promise<DriveCopyResult> {
   const token = getToken();
   if (!token) {
-    throw new Error(
-      "No hay sesión de Google. Inicia sesión primero.",
-    );
+    throw new CopyError(401, "No hay sesión de Google. Inicia sesión primero.");
   }
 
   const today = new Date().toISOString().slice(0, 10);
   const name = `AppFinanciera - Mis finanzas - ${today}`;
 
+  console.info("[drive-copy] templateFileId:", templateFileId);
+  console.info("[drive-copy] endpoint:", `POST /drive/v3/files/${templateFileId}/copy`);
+
   const response = await fetch(
-    `https://www.googleapis.com/drive/v3/files/${templateFileId}/copy`,
+    `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(templateFileId)}/copy`,
     {
       method: "POST",
       headers: {
@@ -53,34 +75,70 @@ export async function copyTemplateToUserDrive(
   );
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    const message = error.error?.message ?? "Error al copiar la plantilla";
+    let reason = "unknown";
+    let message = "Error al copiar la plantilla";
 
-    if (response.status === 403) {
-      throw new Error(
-        "No tienes permisos para copiar la plantilla. " +
-          "Puede que necesites reconectar Google para autorizar el permiso de Drive. " +
-          "Ve a 'Volver a inicio de sesión', inicia sesión de nuevo y acepta el nuevo permiso.",
-      );
-    }
-    if (response.status === 404) {
-      throw new Error(
-        "Plantilla oficial no encontrada. Contacta con soporte.",
-      );
-    }
-    if (response.status === 429) {
-      throw new Error(
-        "Demasiadas solicitudes. Inténtalo de nuevo en unos segundos.",
-      );
+    try {
+      const body = await response.json();
+      reason = body.error?.errors?.[0]?.reason ?? body.error?.status ?? "unknown";
+      message = body.error?.message ?? message;
+    } catch {
+      // ignore parse failure
     }
 
-    throw new Error(`Error al copiar la plantilla: ${message}`);
+    console.info("[drive-copy] HTTP", response.status, "reason:", reason, "message:", message);
+
+    throw new CopyError(response.status, message, reason);
   }
 
   const data = await response.json();
+
+  console.info("[drive-copy] success — copied fileId:", data.id);
+
   return {
     fileId: data.id,
     name: data.name,
     webViewLink: data.webViewLink,
   };
+}
+
+export class CopyError extends Error {
+  constructor(
+    public readonly httpStatus: number,
+    message: string,
+    public readonly googleReason?: string,
+  ) {
+    super(message);
+    this.name = "CopyError";
+  }
+}
+
+export function userFacingCopyError(err: CopyError): string {
+  const status = err.httpStatus;
+
+  if (status === 401) {
+    return "Sesión de Google caducada. Vuelve a iniciar sesión.";
+  }
+
+  if (status === 403) {
+    return (
+      "No tienes permisos para copiar la plantilla. " +
+      "Puede que necesites reconectar Google para autorizar el permiso de Drive. " +
+      "Ve a 'Volver a inicio de sesión', inicia sesión de nuevo y acepta el nuevo permiso. " +
+      "También puedes crear una copia manual desde el botón de abajo."
+    );
+  }
+
+  if (status === 404) {
+    return (
+      "No se pudo acceder a la plantilla oficial a través de Drive. " +
+      "Crea una copia manual desde el botón de abajo."
+    );
+  }
+
+  if (status === 429) {
+    return "Demasiadas solicitudes. Inténtalo de nuevo en unos segundos.";
+  }
+
+  return `Error al copiar la plantilla (HTTP ${status}). Crea una copia manual desde el botón de abajo.`;
 }
