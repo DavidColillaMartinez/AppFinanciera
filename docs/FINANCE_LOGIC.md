@@ -6,13 +6,15 @@
 
 ## 0. Source of truth
 
-- The official data source is the **app Google Sheet template / connected Google
-  Sheet**. The Sheet is the database; the app owns the business logic.
-- The official template resides at the Google Spreadsheet ID stored in
-  `NEXT_PUBLIC_TEMPLATE_SPREADSHEET_ID` (fallback:
-  `1NQk-eJkPgE46V1sbe0KQ67_ZkUcfvdv-RXN99r-mZXc`). The app copies the template
-  to the user's Google Drive using the `https://www.googleapis.com/auth/drive.file`
-  OAuth scope. The copy is private to the user.
+- The official data source is the **app Google Sheet / connected Google Sheet**.
+  The Sheet is the database; the app owns the business logic.
+- The app creates a new native Google Sheet programmatically via the Sheets API
+  (`POST /v4/spreadsheets`) and initializes it with the official template
+  structure (version 1.1.0). This avoids the `drive.file` scope limitation
+  that prevents Drive API copy of arbitrary public files.
+- The external template file (`plantilla_base_finanzas_app.xlsx`, ID
+  `1NQk-eJkPgE46V1sbe0KQ67_ZkUcfvdv-RXN99r-mZXc`) exists as downloadable
+  reference and manual fallback only. The main onboarding flow does not use it.
 - Google Apps Script is not required.
 - All calculations live in TypeScript. The Sheet stores structured data only.
 - The app validates the connected Sheet by structure (sheet names, headers,
@@ -193,6 +195,61 @@ not be mixed with normal spending.
   `Mov_reservas` ledger (see §6). The manual `saldoActual` / `saldoReservado`
   fields on the parent rows are kept for backward compatibility; the engine
   prefers the ledger when it has entries for a target.
+
+### 5.0 Target state
+
+Each savings target (reserve, goal, future payment) has an `estado` field
+of type `GenericStatus`:
+
+| Estado | Included in monthly plan? | Visible in lists? |
+|--------|--------------------------|-------------------|
+| `Activo` | Yes | Yes |
+| `Pausado` | No | Yes |
+| `Completado` | No | Yes |
+| `Cancelado` | No | No (filtered at query level) |
+
+- Reserves and future payments used binary `activo: "S"|"N"`. The adapter maps
+  `activo="S"` → `estado="Activo"` and `activo="N"` → `estado="Pausado"` when
+  the new `estado` column is empty. Migration is backward-compatible.
+
+### 5.0.1 Planning dates
+
+Targets may have `fechaInicio` (start date) and `fechaObjetivo` / `fechaVencimiento`
+(target/completion date).
+
+- If `fechaInicio` is in the future relative to the current month key, the target
+  is **not included** in the monthly plan. The engine compares `fechaInicio.slice(0,7)`
+  against the month key with `isDateBeforeMonth`.
+- If `fechaObjetivo` exists, the engine calculates:
+  ```
+  monthsRemaining = months between current monthKey and fechaObjetivo
+  requiredMonthly = remaining / monthsRemaining
+  ```
+  This feeds the difficulty/feasibility warning.
+- If `fechaObjetivo` is empty, the suggested contribution comes from the
+  `aporteMensual*` field directly (fallback).
+
+### 5.0.2 Priority
+
+Targets have a `prioridad` field: `Alta | Media | Baja`.
+
+- Priority is used for allocation ordering when distributing available savings.
+- Future payments default to `Alta` (mandatory).
+- The engine does not currently implement priority-based proportional allocation;
+  this remains a UI-level display hint until a future phase.
+
+### 5.0.3 Unrealistic target detection
+
+For each active target with a target date, the engine computes `requiredMonthly`.
+The UI can compare this against the available capacity and show a warning:
+
+- `ok` → required ≤ 40 % of available
+- `tight` → required > 40 %
+- `difficult` → required > 75 %
+- `impossible` → required > 100 %
+
+The helper `computeSavingsDifficulty(requiredMonthly, availableAfterObligations)`
+is exported from the engine for this purpose. The form does not block creation.
 
 ### 5.1 General savings (dashboard card)
 

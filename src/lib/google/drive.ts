@@ -1,5 +1,21 @@
 "use client";
 
+// Drive API utilities for manual template reference.
+//
+// The main onboarding flow no longer uses Drive API copy because
+// the drive.file scope cannot access arbitrary files shared with
+// the user — it only grants per-file access to files the app
+// creates or the user explicitly opens via Google Picker.
+//
+// Instead, the app creates a new native Google Sheet via the
+// Sheets API (POST /v4/spreadsheets) and initializes it with
+// the official template structure. See src/lib/sheets/initializer.ts
+//
+// These exports remain for:
+//   - manual fallback (link to /copy URL for user-driven copy)
+//   - reference / documentation
+//   - legacy use if a future scope change allows Drive copy
+
 import { getToken } from "@/lib/sheets/client";
 
 export const OFFICIAL_TEMPLATE_ID =
@@ -48,6 +64,10 @@ export function getTemplateSheetIdOrThrow(): string {
   return id;
 }
 
+// Legacy: Drive API copy from external template file.
+// Not used as the main flow. Kept as fallback in case the
+// OAuth scope is broadened or the template is made accessible
+// to the app through a different mechanism.
 export async function copyTemplateToUserDrive(
   templateFileId: string,
 ): Promise<DriveCopyResult> {

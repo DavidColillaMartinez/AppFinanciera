@@ -531,7 +531,60 @@ live in `docs/FINANCE_AUDIT.md`.
 
 ---
 
-## Phase 12.1.2 — Final core flow fixes — `implemented`
+## Phase 12.3 — Advanced savings planning — `implemented`
+
+- **Purpose**: Add estado/priority/date fields to savings targets, rename salary
+  widget, clean up forms, add direct savings quick action.
+- **Main files**:
+  - `src/constants/sheet-structure.ts` — Added `estado`, `prioridad`,
+    `fechaInicio` to `PAGOS_FUTUROS_HEADERS`.
+  - `src/types/models.ts` — Added `estado: GenericStatus`, `fechaInicio`,
+    `fechaObjetivo` to `ReserveRow`. Added `fechaInicio` to `GoalRow`. Added
+    `estado`, `prioridad`, `fechaInicio` to `FuturePaymentRow`.
+  - `src/features/reserves/hooks/use-reserves.ts` — Added `estado`, `fechaInicio`,
+    `fechaObjetivo` to headers, adapter and mutations. `useReserves` filters by
+    `estado !== "Cancelado"` instead of `activo === "S"`. Adapter derives
+    `estado` from `activo` when the column is missing (backward compat).
+  - `src/features/goals/hooks/use-goals.ts` — Added `fechaInicio` to headers,
+    adapter and mutations. Added `estado` to create mutation.
+  - `src/features/future-payments/hooks/use-future-payments.ts` — Added
+    `estado`, `prioridad`, `fechaInicio` to adapter and mutations.
+    `useFuturePayments` filters by `estado !== "Cancelado"`.
+  - `src/lib/finance/finance-engine.ts` — Added `isDateBeforeMonth` helper.
+    Updated `isActiveReserve`, `isActiveFuturePayment` to use `estado`.
+    Updated `getFuturePaymentProvisions` to use `estado`. Updated
+    `getGeneralSavings` and `getMonthlySavings` to exclude targets with
+    future `fechaInicio`. Updated `getSavingsBreakdown` to pass `estado`,
+    `prioridad`, `fechaInicio`, `fechaObjetivo`, `monthsRemaining`,
+    `requiredMonthly` in `SavingsTargetDetail`. Added
+    `computeSavingsDifficulty` export.
+  - `src/features/savings/hooks/use-savings.ts` — Updated
+    `usePlannedMonthlyTargets` to use `estado` and pass `prioridad`.
+  - `src/app/page.tsx` — Renamed `SavingsPlanWidget` → `PayrollStatusCard`,
+    changed title from "Plan de ahorro" to "Tu nomina". Changed FAB "Ahorro"
+    route from `/savings/monthly` to `/savings`.
+  - `src/components/dashboard/dashboard-customizer.tsx` — Updated widget
+    label from "Plan de ahorro" to "Tu nomina".
+  - `src/components/dashboard/general-savings-breakdown-modal.tsx` — Added
+    priority badge and estado badge to each target row.
+  - `src/features/reserves/components/reserve-form.tsx` — Added `estado`,
+    `fechaInicio`, `fechaObjetivo` fields.
+  - `src/features/goals/components/goal-form.tsx` — Added `estado`,
+    `fechaInicio` fields.
+  - `src/features/future-payments/components/future-payment-form.tsx` — Added
+    `estado`, `prioridad`, `fechaInicio` fields.
+  - `docs/FINANCE_LOGIC.md` — Added §5.0 (target state), §5.0.1 (dates),
+    §5.0.2 (priority), §5.0.3 (unrealistic detection).
+- **Key conventions**:
+  - `estado` replaces `activo` for reserves/future payments by column scan.
+    Missing values are derived from `activo` for backward compatibility.
+  - Targets with future `fechaInicio` are excluded from current-month planning.
+  - `computeSavingsDifficulty` provides a simple threshold check (40/75/100%).
+  - Dashboard salary widget is "Tu nomina", not "Plan de ahorro".
+  - Quick action "Ahorro" links to `/savings` (direct contribution/withdrawal),
+    not to `/savings/monthly` (monthly plan confirmation).
+
+---
 
 - **Purpose**: Fix the last remaining core-flow issues after Phase 12.1.1.
 - **Main files**:
@@ -558,67 +611,63 @@ live in `docs/FINANCE_AUDIT.md`.
 
 ---
 
-## Phase 12.X — Professional Google Drive template creation flow — `implemented`
+## Phase 12.X — Professional Google Sheet creation flow — `implemented` (revised)
 
-- **Purpose**: Automate the onboarding Sheet creation via Drive API so users
-  do not need to download an Excel template or make their Sheet public.
-- **OAuth scope added**:
-  - `https://www.googleapis.com/auth/drive.file` — requested alongside
-    existing `spreadsheets`, `userinfo.email`, `userinfo.profile` scopes.
-  - Existing tokens without the Drive scope cause a clear 403 error on
-    copy; the user is guided to reconnect Google to grant the new scope.
-  - `prompt=consent` ensures the consent screen always appears so the user
-    can approve the new scope.
+- **Purpose**: Replace buggy Drive API copy with programmatic Sheet creation
+  via the Sheets API. The `drive.file` scope does not grant access to copy
+  arbitrary public files — it only covers files the app created or the user
+  opened explicitly. The new flow creates a native Google Sheet and
+  initializes it with the official template structure using batch operations.
+- **Design change**: The app no longer copies the external template
+  (`1NQk-eJkPgE46V1sbe0KQ67_ZkUcfvdv-RXN99r-mZXc`) via the Drive API. Instead
+  it creates a fresh Sheet and writes every sheet, header, Config row and
+  default category programmatically.
+- **OAuth scopes**: `drive.file` scope is kept (declared in Phase 12.X first
+  iteration) but is only needed for the spreadsheet write scope, not for Drive
+  copy. No broader Drive scope is requested. The template env var is optional.
 - **Main files**:
-  - `src/lib/google/drive.ts` — new. `copyTemplateToUserDrive(templateFileId)`
-    calls `POST /drive/v3/files/{templateFileId}/copy` with a descriptive
-    name (`AppFinanciera - Mis finanzas - YYYY-MM-DD`). Returns fileId, name
-    and webViewLink. Error handling for 403 (scope/permission), 404 (missing
-    template), 429 (quota) and generic failures.
-  - `src/lib/google/auth.ts` — updated `GOOGLE_SCOPES` array to include
-    `drive.file`.
-  - `src/lib/google/index.ts` — re-exports the new drive module.
-  - `src/app/onboarding/page.tsx` — redesigned step flow:
-    - Step 1 ("google"): Google login as the primary action. Excel download
-      removed from this step.
-    - Step 2 ("sheet"): "Crear mi hoja automáticamente" as the primary
-      card, "Conectar una hoja existente" as a toggleable manual input,
-      privacy explanation, and Excel download as a secondary fallback
-      under a `<details>` accordion.
-  - `.env.example` — new file with `NEXT_PUBLIC_TEMPLATE_SPREADSHEET_ID`.
-  - `docs/FINANCE_LOGIC.md` — §0 updated to mention the official template
-    ID, Drive copy flow, and `drive.file` scope.
-- **Template env var**:
-  - `NEXT_PUBLIC_TEMPLATE_SPREADSHEET_ID` — required for the auto-create
-    flow. Default fallback: `1NQk-eJkPgE46V1sbe0KQ67_ZkUcfvdv-RXN99r-mZXc`.
-  - If missing, auto-create throws a clear error and the manual URL flow
-    still works.
-- **Privacy behavior**:
-  - The Drive copy is private to the user's account. The app never asks the
-    user to set "anyone with the link can edit".
-  - The copy is created in the authenticated user's Drive via `drive.file`
-    scope (per-file access only).
-  - Permission errors for manual Sheets show the account mismatch message
-    instead of asking to make the Sheet public.
-- **Manual URL fallback**:
-  - Still available via "Conectar una hoja existente".
-  - Works with private Sheets the user's account can access.
-  - Permission error shown for inaccessible Sheets without suggesting
-    public sharing.
-  - Excel download kept as `<details>` help for advanced users.
+  - `src/lib/sheets/initializer.ts` — new. `createAndInitializeSheet()`:
+    1. Creates a spreadsheet via `POST /v4/spreadsheets` (title
+       "AppFinanciera - Mis finanzas").
+    2. Renames the default "Sheet1" → "Config" and adds all other sheets
+       via `spreadsheets.batchUpdate` (single API call).
+    3. Writes all headers and initial data via
+       `spreadsheets.values.batchUpdate` (single API call).
+    Returns `{ success, spreadsheetId, spreadsheetUrl, error }`.
+  - `src/lib/google/drive.ts` — `copyTemplateToUserDrive` kept as legacy
+    fallback but no longer called from the main flow. Documented why Drive
+    API copy is not used.
+  - `src/app/onboarding/page.tsx` — "Crear mi hoja automáticamente" now
+    calls `createAndInitializeSheet()`. Removed Drive copy error handling.
+    Removed env var validation gate (template ID no longer required).
+    Fallback `createFailed` card offers `/copy` URL and manual connection.
+  - `.env.example` — `NEXT_PUBLIC_TEMPLATE_SPREADSHEET_ID` is optional
+    (commented out by default).
+- **Sheets created** (11 sheets):
+  - Config, Movimientos, Categorias, Cuentas, Gastos_fijos, Pagos_futuros,
+    Objetivos, Reservas, Mov_reservas, Pagos_aplazados, 00_LEEME
+- **Headers written**: All required + recommended headers per sheet, matching
+  `src/constants/sheet-structure.ts` and current validation.
+- **Config rows**: `templateVersion=1.1.0`, `appMinVersion=1.0.0`, currency,
+  locale, firstDayOfWeek, all salary keys, schemaLocked.
+- **Default categories**: All categories from `DEFAULT_CATEGORIES` in
+  `src/lib/categories/defaults.ts` (including "Transferencia interna").
+  IDs are deterministic slugs (`CAT-nomina`, `CAT-comida`, etc.).
+- **No fake/example rows**: No example ledger entries, no example movements,
+  no example accounts. The 00_LEEME sheet has documentation text only.
+- **No default accounts**: Skipped because accounts are personal/user-defined.
+  The user creates them via the app after onboarding.
+- **Privacy**: Sheet is private by default (native Sheets API behavior).
+- **Manual URL fallback**: Unchanged. "Conectar una hoja existente" still
+  works with private Sheets.
 - **Error handling**:
-  - Missing env var → clear error, manual URL still works.
-  - Old token without Drive scope → 403 from Drive API, clear error with
-    guidance to reconnect Google.
-  - Drive copy fails → error shown, user falls back to manual URL.
-  - User cancels Google consent → normal flow continues, user stays on
-    step 1.
-  - Quota/rate limit → 429 from Drive API, clear error.
-  - Copied Sheet validation fails → error shown with fallback suggestion.
-  - Manual Sheet permission error → 403 message without public-sharing
-    suggestion.
-  - Manual pasted file is not a native Google Sheet → validation fails
-    with a clear error (same behavior as before).
+  - Token missing → "No hay sesion de Google" with reconnect guidance.
+  - Sheet creation fails (HTTP 401/403/429) → specific user-facing messages.
+  - Batch update fails → error with link to partially created Sheet.
+  - Validation fails after creation → error shown with fallback suggestions.
+  - Network errors → caught and displayed.
+- **Template env var**: `NEXT_PUBLIC_TEMPLATE_SPREADSHEET_ID` is now optional.
+  The main flow does not require it. It remains as manual fallback reference.
 
 ---
 
@@ -637,4 +686,5 @@ live in `docs/FINANCE_AUDIT.md`.
 | 12 | Emergency functional repair + mobile responsive sweep | implemented |
 | 12.1.1 | Fix failed core flow repairs with real acceptance tests | implemented |
 | 12.1.2 | Final core flow fixes: Disponible detail, salary detection, delete fix | implemented |
+| 12.3 | Advanced savings planning: estado/priority/dates, widget rename, forms | implemented |
 | 12.X | Professional Google Drive template creation flow | implemented |

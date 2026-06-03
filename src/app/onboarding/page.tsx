@@ -18,14 +18,8 @@ import { SHEET_NAMES } from "@/constants/sheet-structure";
 import { validateSheetCompatibility, readConfig } from "@/lib/sheets/reader";
 import { getToken, hasToken } from "@/lib/sheets/client";
 import { AlertCircle, CheckCircle2, Loader2, Plus, ExternalLink } from "lucide-react";
-import {
-  copyTemplateToUserDrive,
-  getTemplateSheetIdOrThrow,
-  CopyError,
-  userFacingCopyError,
-  MANUAL_COPY_URL,
-  validateTemplateId,
-} from "@/lib/google/drive";
+import { createAndInitializeSheet } from "@/lib/sheets/initializer";
+import { MANUAL_COPY_URL } from "@/lib/google/drive";
 
 type Step = "google" | "sheet" | "validating" | "creating" | "done";
 
@@ -61,13 +55,7 @@ function OnboardingContent() {
         : null,
   );
   const [showManualInput, setShowManualInput] = useState(false);
-  const [driveCopyFailed, setDriveCopyFailed] = useState(false);
-
-  const [templateEnv] = useState<{ valid: boolean; error: string | null }>(() => {
-    const raw = process.env.NEXT_PUBLIC_TEMPLATE_SPREADSHEET_ID;
-    if (!raw) return { valid: true, error: null };
-    return validateTemplateId(raw);
-  });
+  const [createFailed, setCreateFailed] = useState(false);
   const canUseGoogleOAuth = isGoogleAuthConfigured();
 
   useEffect(() => {
@@ -99,66 +87,64 @@ function OnboardingContent() {
 
   async function handleAutoCreate() {
     setError(null);
-    setDriveCopyFailed(false);
+    setCreateFailed(false);
     setStep("creating");
 
-    try {
-      const templateId = getTemplateSheetIdOrThrow();
-      const result = await copyTemplateToUserDrive(templateId);
-      const newSheetId = result.fileId;
-      const sheetUrl = `https://docs.google.com/spreadsheets/d/${newSheetId}/edit`;
+    const result = await createAndInitializeSheet();
 
-      setStep("validating");
-
-      const ESSENTIAL_SHEETS = [
-        SHEET_NAMES.CONFIG,
-        SHEET_NAMES.MOVIMIENTOS,
-        SHEET_NAMES.CATEGORIAS,
-        SHEET_NAMES.CUENTAS,
-      ];
-
-      const { valid, errors, warnings } = await validateSheetCompatibility(
-        newSheetId,
-        ESSENTIAL_SHEETS,
-      );
-
-      if (!valid) {
-        setError(
-          `La copia se creó pero la validación falló: ${errors.join("; ")}. ` +
-            "Puedes intentar conectar la hoja manualmente desde la opción inferior.",
-        );
-        setStep("sheet");
-        return;
-      }
-
-      if (warnings.length > 0) {
-        console.warn("Sheet compatibility warnings:", warnings);
-      }
-
-      try {
-        const config = await readConfig(newSheetId);
-        setTemplateVersion(
-          config["templateVersion"] ?? null,
-          config["appMinVersion"] ?? null,
-        );
-      } catch (e) {
-        console.warn("Could not read Config sheet:", (e as Error).message);
-      }
-
-      setSheetConnection(newSheetId, sheetUrl);
-      localStorage.setItem("last_sheet_url", sheetUrl);
-      setAuthStatus("authenticated");
-      setStep("done");
-      router.replace("/");
-    } catch (e) {
-      if (e instanceof CopyError) {
-        setError(userFacingCopyError(e));
-        setDriveCopyFailed(true);
-      } else {
-        setError((e as Error).message);
-      }
+    if (!result.success) {
+      setError(result.error ?? "Error al crear la hoja.");
+      setCreateFailed(true);
       setStep("sheet");
+      return;
     }
+
+    const newSheetId = result.spreadsheetId;
+    const sheetUrl = result.spreadsheetUrl;
+
+    setStep("validating");
+
+    const ESSENTIAL_SHEETS = [
+      SHEET_NAMES.CONFIG,
+      SHEET_NAMES.MOVIMIENTOS,
+      SHEET_NAMES.CATEGORIAS,
+      SHEET_NAMES.CUENTAS,
+    ];
+
+    const { valid, errors, warnings } = await validateSheetCompatibility(
+      newSheetId,
+      ESSENTIAL_SHEETS,
+    );
+
+    if (!valid) {
+      setError(
+        `La hoja se creó pero la validación falló: ${errors.join("; ")}. ` +
+          "Puedes abrirla en Drive o intentar conectar manualmente.",
+      );
+      setCreateFailed(true);
+      setStep("sheet");
+      return;
+    }
+
+    if (warnings.length > 0) {
+      console.warn("Sheet compatibility warnings:", warnings);
+    }
+
+    try {
+      const config = await readConfig(newSheetId);
+      setTemplateVersion(
+        config["templateVersion"] ?? null,
+        config["appMinVersion"] ?? null,
+      );
+    } catch (e) {
+      console.warn("Could not read Config sheet:", (e as Error).message);
+    }
+
+    setSheetConnection(newSheetId, sheetUrl);
+    localStorage.setItem("last_sheet_url", sheetUrl);
+    setAuthStatus("authenticated");
+    setStep("done");
+    router.replace("/");
   }
 
   async function handleSheetConnect() {
@@ -404,45 +390,31 @@ function OnboardingContent() {
 
         {step === "sheet" && (
           <div className="space-y-4">
-            {templateEnv.valid ? (
-              <Card
-                className="cursor-pointer border-primary/30 hover:border-primary/60 transition-colors"
-                onClick={handleAutoCreate}
-              >
-                <CardHeader>
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <Plus className="h-5 w-5 text-primary" />
-                    Crear mi hoja automáticamente
-                  </CardTitle>
-                  <CardDescription>
-                    Crearemos una copia privada de la plantilla oficial en tu
-                    Google Drive. La hoja será tuya y solo tú tendrás acceso.
-                  </CardDescription>
-                </CardHeader>
-              </Card>
-            ) : (
-              <Card className="border-yellow-300 bg-yellow-50">
-                <CardHeader>
-                  <CardTitle className="text-sm flex items-center gap-2 text-yellow-800">
-                    <AlertCircle className="h-4 w-4" />
-                    Configuración pendiente
-                  </CardTitle>
-                  <CardDescription className="text-yellow-700">
-                    {templateEnv.error ?? "NEXT_PUBLIC_TEMPLATE_SPREADSHEET_ID no configurado."}
-                    {" "}Conecta una hoja existente o descarga la plantilla.
-                  </CardDescription>
-                </CardHeader>
-              </Card>
-            )}
+            <Card
+              className="cursor-pointer border-primary/30 hover:border-primary/60 transition-colors"
+              onClick={handleAutoCreate}
+            >
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Plus className="h-5 w-5 text-primary" />
+                  Crear mi hoja automáticamente
+                </CardTitle>
+                <CardDescription>
+                  Crearemos una hoja nueva y privada en tu Google Drive con la
+                  estructura oficial de AppFinanciera.
+                </CardDescription>
+              </CardHeader>
+            </Card>
 
-            {driveCopyFailed && (
+            {createFailed && (
               <Card className="border-blue-300 bg-blue-50">
                 <CardContent className="pt-6 space-y-3">
                   <p className="text-sm text-blue-900 font-medium">
-                    Crear una copia manual
+                    Abrir la hoja creada o hacer una copia manual
                   </p>
                   <p className="text-xs text-blue-700">
-                    Haz una copia en tu Drive y pega aquí el enlace de la copia.
+                    Haz una copia de la plantilla en tu Drive o abre la hoja
+                    que acaba de crearse y conectala manualmente.
                   </p>
                   <div className="flex flex-col gap-2">
                     <a
@@ -455,7 +427,7 @@ function OnboardingContent() {
                       Abrir plantilla para hacer copia manual
                     </a>
                     <button
-                      onClick={() => { setShowManualInput(true); setDriveCopyFailed(false); }}
+                      onClick={() => setShowManualInput(true)}
                       className="text-xs text-center text-muted-foreground hover:text-foreground underline underline-offset-4"
                     >
                       Ya tengo la URL de mi copia
@@ -589,7 +561,7 @@ function OnboardingContent() {
             <CardContent className="py-12 text-center space-y-4">
               <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
               <p className="text-muted-foreground">
-                Creando copia de la plantilla en tu Drive...
+                Creando tu hoja de finanzas...
               </p>
             </CardContent>
           </Card>
