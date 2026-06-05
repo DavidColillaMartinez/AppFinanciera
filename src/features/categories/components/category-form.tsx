@@ -1,6 +1,6 @@
 "use client";
 
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   categoryCreateSchema,
@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { IconPicker } from "@/components/ui/icon-picker";
 import { CategoryType } from "@/constants/enums";
 import { useState } from "react";
 import { useCreateCategory, useUpdateCategory } from "../hooks/use-categories";
@@ -50,6 +51,7 @@ export function CategoryForm({
     reset,
     setValue,
     watch,
+    control,
     formState: { errors },
   } = useForm<CategoryCreateInput>({
     resolver: zodResolver(categoryCreateSchema),
@@ -201,13 +203,18 @@ export function CategoryForm({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="icono">Icono</Label>
-            <Input
-              id="icono"
-              placeholder="Opcional"
-              className="h-11"
-              {...register("icono")}
+            <Label>Icono</Label>
+            <Controller
+              control={control}
+              name="icono"
+              render={({ field }) => (
+                <IconPicker
+                  value={field.value || ""}
+                  onChange={field.onChange}
+                />
+              )}
             />
+            <input type="hidden" {...register("icono")} />
           </div>
 
           <div className="space-y-2">

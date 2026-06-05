@@ -36,6 +36,10 @@ import { ChartRenderer } from "@/components/dashboard/chart-renderer";
 import { DisponibleExplanationModal } from "@/components/dashboard/disponible-explanation-modal";
 import { GeneralSavingsBreakdownModal } from "@/components/dashboard/general-savings-breakdown-modal";
 import { MonthlySavingsBreakdownModal } from "@/components/dashboard/monthly-savings-breakdown-modal";
+import { AddSavingsModal } from "@/components/dashboard/add-savings-modal";
+import { DirectSavingsModal } from "@/components/dashboard/direct-savings-modal";
+import { InstallAppButton } from "@/components/pwa/install-app-button";
+import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { TransactionType } from "@/constants/enums";
 import { cn } from "@/lib/utils";
 import { buildSalaryMovementId } from "@/lib/finance/salary";
@@ -64,8 +68,10 @@ import { useReserves } from "@/features/reserves/hooks/use-reserves";
 import { useGoals } from "@/features/goals/hooks/use-goals";
 import { useTransactions } from "@/features/transactions/hooks/use-transactions";
 import { useDeferredPayments } from "@/features/deferred-payments/hooks/use-deferred-payments";
+import { useAllReserveMovements } from "@/features/savings/hooks/use-savings";
 import { getChartData } from "@/lib/finance/chart-data";
 import { generateMonthKey } from "@/lib/sheets/adapters";
+import { buildMonthlySavingsPlan } from "@/lib/finance/finance-engine";
 import { hasToken } from "@/lib/sheets/client";
 import { LoadingState } from "@/components/states/loading-state";
 import { ErrorState } from "@/components/states/error-state";
@@ -224,11 +230,20 @@ export default function VistaMesPage() {
   const [salaryAutoAdded, setSalaryAutoAdded] = useState(false);
   const [reorderMode, setReorderMode] = useState(false);
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: reorderMode ? 0 : 100 } })
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: reorderMode ? 6 : 12,
+        delay: reorderMode ? 180 : 0,
+        tolerance: 8,
+      },
+    })
   );
   const [showDisponibleModal, setShowDisponibleModal] = useState(false);
   const [showGeneralSavingsModal, setShowGeneralSavingsModal] = useState(false);
   const [showMonthlySavingsModal, setShowMonthlySavingsModal] = useState(false);
+  const [showAddSavingsModal, setShowAddSavingsModal] = useState(false);
+  const [showDirectSavingsModal, setShowDirectSavingsModal] = useState(false);
+  const [directType, setDirectType] = useState<"aporte" | "retirada">("aporte");
 
   const widgets = dashboardConfig.widgets;
   const isVisible = (id: string) => widgets.find((w) => w.id === id)?.enabled ?? true;
@@ -247,6 +262,7 @@ export default function VistaMesPage() {
   const { data: deferredPayments } = useDeferredPayments(dataReady ? sheetId : null);
   const { data: reserves } = useReserves(dataReady ? sheetId : null);
   const { data: goals } = useGoals(dataReady ? sheetId : null);
+  const { data: reserveMovements } = useAllReserveMovements(dataReady ? sheetId : null);
   const { data: salaryConfig } = useSalaryConfig(dataReady ? sheetId : null);
   const ensureSalary = useEnsureSalaryForMonth(dataReady ? sheetId : null);
 
@@ -394,10 +410,39 @@ export default function VistaMesPage() {
 
   const monthlySavingsHasAny = monthlySavings.totalForMonth > 0 || monthlySavings.planned > 0;
 
+  const monthlyPlan = useMemo(() => {
+    return buildMonthlySavingsPlan({
+      monthKey: selectedMonth,
+      transactions: transactions ?? [],
+      categories: categories ?? [],
+      accounts: accounts ?? [],
+      fixedExpenses: fixedExpenses ?? [],
+      futurePayments: futurePayments ?? [],
+      deferredPayments: deferredPayments ?? [],
+      reserves: reserves ?? [],
+      goals: goals ?? [],
+      reserveMovements: reserveMovements ?? [],
+      salaryConfig: {
+        monthlyIncome: salaryConfig?.enabled ? salaryConfig.fixedAmount : 0,
+        incomeType: (salaryConfig?.type ?? "fixed") as "fixed" | "variable",
+      },
+      confirmedFixedExpenseIds: undefined,
+    }, {
+      availableCapacity: capacidadAhorro,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedMonth, summary, salaryConfig]);
+
+  const eligibleSavingsCount = useMemo(
+    () => monthlyPlan.items.filter((i) => !i.isCompleted).length,
+    [monthlyPlan],
+  );
+
   function handleAddType(type: TransactionType) {
     if (type === TransactionType.AHORRO) {
       setShowAddMenu(false);
-      router.push("/savings");
+      setDirectType("aporte");
+      setShowDirectSavingsModal(true);
       return;
     }
     setSelectedType(type);
@@ -494,6 +539,8 @@ export default function VistaMesPage() {
             <p className="text-sm text-muted-foreground">Vista del mes</p>
           </div>
           <div className="flex items-center gap-1 shrink-0">
+            <ThemeToggle variant="segmented" className="hidden sm:inline-flex" />
+            <InstallAppButton size="sm" variant="ghost" showLabel={false} className="hidden sm:inline-flex h-9 w-9 p-0" />
             <Button
               variant="ghost"
               size="icon"
@@ -791,7 +838,8 @@ export default function VistaMesPage() {
           if (w.kind === "chart" && w.chartId) {
             const chart = dashboardConfig.charts.find((c) => c.id === w.chartId);
             if (!chart) return null;
-            const sources: ChartDataSource[] = (chart as any).dataSources ?? [chart.dataSource];
+            const sources: ChartDataSource[] =
+              (chart as { dataSources?: ChartDataSource[] }).dataSources ?? [chart.dataSource];
             const cData = getChartData(sources, {
               transactions: transactions ?? [],
               categories: categories ?? [],
@@ -935,6 +983,24 @@ export default function VistaMesPage() {
         accounts={accounts ?? []}
         accountBalances={summary.accountBalances}
         accountTotalMoney={summary.accountTotalMoney}
+        eligibleSavingsCount={eligibleSavingsCount}
+        onAddSavings={() => {
+          setShowDisponibleModal(false);
+          setShowAddSavingsModal(true);
+        }}
+      />
+
+      <AddSavingsModal
+        open={showAddSavingsModal}
+        onOpenChange={setShowAddSavingsModal}
+        sheetId={sheetId}
+        monthKey={selectedMonth}
+        monthName={monthName}
+        items={monthlyPlan.items}
+        availableCapacity={monthlyPlan.availableCapacity}
+        onSuccess={() => {
+          refetchTransactions();
+        }}
       />
 
       <GeneralSavingsBreakdownModal
@@ -957,6 +1023,19 @@ export default function VistaMesPage() {
         monthName={monthName}
         breakdown={monthlySavings}
         targetNameById={targetNameById}
+      />
+
+      <DirectSavingsModal
+        open={showDirectSavingsModal}
+        onOpenChange={setShowDirectSavingsModal}
+        sheetId={sheetId}
+        reserves={reserves ?? []}
+        goals={goals ?? []}
+        futurePayments={futurePayments ?? []}
+        defaultType={directType}
+        onSuccess={() => {
+          refetchTransactions();
+        }}
       />
     </div>
   );

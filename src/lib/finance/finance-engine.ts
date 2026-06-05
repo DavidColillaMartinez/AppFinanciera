@@ -125,6 +125,38 @@ export interface SavingsBreakdown {
   futurePayments: SavingsTargetDetail[];
 }
 
+export type SavingsDifficulty = "ok" | "tight" | "difficult" | "impossible";
+
+export interface MonthlySavingsPlanItem {
+  targetType: "reserva" | "objetivo" | "pago_futuro";
+  targetId: string;
+  name: string;
+  status: string;
+  priority: "Alta" | "Media" | "Baja" | "—";
+  currentSaved: number;
+  targetAmount: number;
+  remainingAmount: number;
+  recommendedAmount: number;
+  requiredMonthly: number;
+  confirmedThisMonth: number;
+  pendingAmount: number;
+  difficulty: SavingsDifficulty;
+  reason: string;
+  hasTargetDate: boolean;
+  monthsRemaining: number;
+  isCompleted: boolean;
+}
+
+export interface MonthlySavingsPlan {
+  monthKey: MonthKey;
+  plannedTotal: number;
+  confirmedTotal: number;
+  pendingTotal: number;
+  availableCapacity: number;
+  capacityInsufficient: boolean;
+  items: MonthlySavingsPlanItem[];
+}
+
 export interface DashboardFinanceSummary {
   available: AvailableBalanceBreakdown;
   savings: SavingsSummary;
@@ -328,6 +360,18 @@ function isActiveGoal(g: GoalRow): boolean {
 
 function isActiveFuturePayment(f: FuturePaymentRow): boolean {
   return f.estado === "Activo";
+}
+
+function priorityWeight(p: string | undefined | null): number {
+  if (p === "Alta") return 3;
+  if (p === "Media") return 2;
+  if (p === "Baja") return 1;
+  return 0;
+}
+
+function normalizePriority(p: string | undefined | null): "Alta" | "Media" | "Baja" | "—" {
+  if (p === "Alta" || p === "Media" || p === "Baja") return p;
+  return "—";
 }
 
 export function getGeneralSavings(ctx: FinanceContext): SavingsSummary {
@@ -799,6 +843,223 @@ export function getDashboardSummary(
     executedSavings: available.executedSavings,
     accountTotalMoney,
     accountBalances,
+  };
+}
+
+export interface BuildMonthlySavingsPlanOptions {
+  availableCapacity?: number;
+  monthlyMovements?: ReserveMovementRow[];
+}
+
+function buildTargetSnapshot(
+  targetType: "reserva" | "objetivo" | "pago_futuro",
+  targetId: string,
+  name: string,
+  status: string,
+  priorityRaw: string | undefined,
+  fechaObjetivo: string,
+  currentSaved: number,
+  targetAmount: number,
+  monthlyRecommended: number,
+  monthKey: MonthKey,
+  monthMovements: ReserveMovementRow[],
+): MonthlySavingsPlanItem {
+  const completed = status === "Completado" || (targetAmount > 0 && currentSaved >= targetAmount);
+  const remaining = Math.max(0, targetAmount - currentSaved);
+  const monthsRemaining = computeMonthsRemaining(fechaObjetivo, monthKey);
+  const hasTargetDate = Boolean(fechaObjetivo);
+  const requiredMonthly = hasTargetDate && monthsRemaining > 0
+    ? remaining / monthsRemaining
+    : 0;
+  const confirmed = monthMovements
+    .filter(
+      (m) =>
+        m.tipoMovimiento === TipoMovimientoReserva.APORTE &&
+        m.tipoDestino === targetType &&
+        m.destinoId === targetId,
+    )
+    .reduce((acc, m) => acc + m.importe, 0);
+  const reason = completed
+    ? "Objetivo completado"
+    : hasTargetDate && monthsRemaining > 0
+      ? `Reparte ${remaining.toFixed(2)} € en ${monthsRemaining} meses`
+      : hasTargetDate
+        ? "Fecha objetivo alcanzada"
+        : "Sin fecha objetivo — distribución por prioridad";
+  return {
+    targetType,
+    targetId,
+    name,
+    status,
+    priority: normalizePriority(priorityRaw),
+    currentSaved,
+    targetAmount,
+    remainingAmount: remaining,
+    recommendedAmount: 0,
+    requiredMonthly,
+    confirmedThisMonth: confirmed,
+    pendingAmount: 0,
+    difficulty: "ok",
+    reason,
+    hasTargetDate,
+    monthsRemaining,
+    isCompleted: completed,
+  };
+}
+
+export function buildMonthlySavingsPlan(
+  ctx: FinanceContext,
+  options: BuildMonthlySavingsPlanOptions = {},
+): MonthlySavingsPlan {
+  const monthMovements =
+    options.monthlyMovements ??
+    getActiveMovements(ctx.reserveMovements).filter((m) => {
+      const mKey = m.mesClave || (m.fecha ?? "").slice(0, 7);
+      return mKey === ctx.monthKey;
+    });
+
+  const snapshots: MonthlySavingsPlanItem[] = [];
+
+  for (const r of ctx.reserves) {
+    if (!isActiveReserve(r)) continue;
+    if (r.importeObjetivo <= 0 && r.aporteMensualSugerido <= 0) continue;
+    if (!isDateBeforeMonth(r.fechaInicio, ctx.monthKey)) continue;
+    const movements = getReserveMovements(ctx, r.reservaId);
+    const saved = computeEffectiveBalance(movements, r.saldoActual);
+    snapshots.push(
+      buildTargetSnapshot(
+        "reserva",
+        r.reservaId,
+        r.nombre,
+        r.estado,
+        r.prioridad,
+        r.fechaObjetivo,
+        saved,
+        r.importeObjetivo,
+        r.aporteMensualSugerido,
+        ctx.monthKey,
+        monthMovements,
+      ),
+    );
+  }
+
+  for (const g of ctx.goals) {
+    if (!isActiveGoal(g)) continue;
+    if (g.importeObjetivo <= 0 && g.aporteMensual <= 0) continue;
+    if (!isDateBeforeMonth(g.fechaInicio, ctx.monthKey)) continue;
+    const movements = getGoalMovements(ctx, g.objetivoId);
+    const saved = computeEffectiveBalance(movements, g.saldoActual);
+    snapshots.push(
+      buildTargetSnapshot(
+        "objetivo",
+        g.objetivoId,
+        g.nombre,
+        g.estado,
+        g.prioridad,
+        g.fechaObjetivo,
+        saved,
+        g.importeObjetivo,
+        g.aporteMensual,
+        ctx.monthKey,
+        monthMovements,
+      ),
+    );
+  }
+
+  for (const f of ctx.futurePayments) {
+    if (!isActiveFuturePayment(f)) continue;
+    if (f.importeObjetivo <= 0 && f.aporteMensual <= 0) continue;
+    if (!isDateBeforeMonth(f.fechaInicio, ctx.monthKey)) continue;
+    const movements = getFuturePaymentMovements(ctx, f.pagoId);
+    const saved = computeEffectiveBalance(movements, f.saldoReservado);
+    snapshots.push(
+      buildTargetSnapshot(
+        "pago_futuro",
+        f.pagoId,
+        f.concepto,
+        f.estado,
+        f.prioridad,
+        f.fechaVencimiento,
+        saved,
+        f.importeObjetivo,
+        f.aporteMensual,
+        ctx.monthKey,
+        monthMovements,
+      ),
+    );
+  }
+
+  let capacity = options.availableCapacity ?? 0;
+  if (!options.availableCapacity) {
+    const available = getAvailableBalance(ctx);
+    capacity = Math.max(0, available.available);
+  }
+
+  const fixedDateItems = snapshots.filter(
+    (s) => !s.isCompleted && s.hasTargetDate && s.monthsRemaining > 0 && s.requiredMonthly > 0,
+  );
+  const noDateItems = snapshots.filter(
+    (s) =>
+      !s.isCompleted &&
+      !s.hasTargetDate &&
+      s.targetType === "objetivo",
+  );
+
+  for (const item of fixedDateItems) {
+    item.recommendedAmount = item.requiredMonthly;
+  }
+
+  const fixedTotal = fixedDateItems.reduce((acc, i) => acc + i.recommendedAmount, 0);
+  const remaining = Math.max(0, capacity - fixedTotal);
+
+  const totalWeight = noDateItems.reduce(
+    (acc, i) => acc + priorityWeight(i.priority),
+    0,
+  );
+  if (totalWeight > 0) {
+    for (const item of noDateItems) {
+      const w = priorityWeight(item.priority);
+      const share = w > 0 ? (remaining * w) / totalWeight : 0;
+      item.recommendedAmount = share;
+    }
+  }
+
+  for (const item of snapshots) {
+    const capped = Math.max(0, item.recommendedAmount - item.confirmedThisMonth);
+    item.pendingAmount = item.isCompleted ? 0 : capped;
+    if (item.confirmedThisMonth >= item.recommendedAmount && item.recommendedAmount > 0) {
+      item.difficulty = "ok";
+    } else if (capacity <= 0) {
+      item.difficulty = "impossible";
+      item.reason = "Sin capacidad disponible este mes";
+    } else if (item.recommendedAmount > capacity) {
+      item.difficulty = "impossible";
+      item.reason = "Capacidad insuficiente";
+    } else if (item.recommendedAmount > capacity * 0.75) {
+      item.difficulty = "difficult";
+    } else if (item.recommendedAmount > capacity * 0.4) {
+      item.difficulty = "tight";
+    } else {
+      item.difficulty = "ok";
+    }
+    if (item.confirmedThisMonth > 0) {
+      item.difficulty = "ok";
+    }
+  }
+
+  const plannedTotal = snapshots.reduce((acc, i) => acc + i.recommendedAmount, 0);
+  const confirmedTotal = snapshots.reduce((acc, i) => acc + i.confirmedThisMonth, 0);
+  const pendingTotal = Math.max(0, plannedTotal - confirmedTotal);
+  const capacityInsufficient = capacity < fixedTotal;
+
+  return {
+    monthKey: ctx.monthKey,
+    plannedTotal,
+    confirmedTotal,
+    pendingTotal,
+    availableCapacity: capacity,
+    capacityInsufficient,
+    items: snapshots,
   };
 }
 

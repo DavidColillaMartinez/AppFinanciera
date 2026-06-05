@@ -41,6 +41,8 @@ interface DisponibleExplanationModalProps {
   accounts?: AccountRow[];
   accountBalances?: Map<string, AccountBalanceBreakdown>;
   accountTotalMoney?: number;
+  eligibleSavingsCount?: number;
+  onAddSavings?: () => void;
 }
 
 function getRoleLabel(rol: string): string {
@@ -93,6 +95,8 @@ export function DisponibleExplanationModal({
   accounts = [],
   accountBalances,
   accountTotalMoney = 0,
+  eligibleSavingsCount = 0,
+  onAddSavings,
 }: DisponibleExplanationModalProps) {
   const hasData =
     available.income > 0 ||
@@ -333,6 +337,23 @@ export function DisponibleExplanationModal({
                 <CalendarCheck className="h-4 w-4" />
                 Confirmar ahorro del mes
               </Link>
+            </Button>
+          )}
+
+          {onAddSavings && (
+            <Button
+              size="sm"
+              variant="default"
+              className="w-full gap-2 bg-savings hover:bg-savings/90"
+              onClick={onAddSavings}
+            >
+              <PiggyBank className="h-4 w-4" />
+              Añadir ahorros
+              {eligibleSavingsCount > 0 && (
+                <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded-full bg-white/20">
+                  {eligibleSavingsCount}
+                </span>
+              )}
             </Button>
           )}
         </div>

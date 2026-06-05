@@ -20,9 +20,10 @@ import { useToast } from "@/components/ui/toast";
 import { EmptyState } from "@/components/states/empty-state";
 import { LoadingState } from "@/components/states/loading-state";
 import { ErrorState } from "@/components/states/error-state";
+import { DirectSavingsModal } from "@/components/dashboard/direct-savings-modal";
 import { generateMonthKey } from "@/lib/sheets/adapters";
 import { TipoDestinoReserva } from "@/constants/enums";
-import { ChevronLeft, CalendarCheck, X, CheckCircle2 } from "lucide-react";
+import { ChevronLeft, CalendarCheck, X, CheckCircle2, Plus, Minus } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export default function MonthlySavingsPage() {
@@ -34,6 +35,8 @@ export default function MonthlySavingsPage() {
   const [amounts, setAmounts] = useState<Record<string, string>>({});
   const [submittingId, setSubmittingId] = useState<string | null>(null);
   const [submittingAll, setSubmittingAll] = useState(false);
+  const [extraTarget, setExtraTarget] = useState<PlannedTargetWithStatus | null>(null);
+  const [withdrawTarget, setWithdrawTarget] = useState<PlannedTargetWithStatus | null>(null);
 
   const { data: reserves, isLoading: lR } = useReserves(sheetId);
   const { data: goals, isLoading: lG } = useGoals(sheetId);
@@ -347,6 +350,29 @@ export default function MonthlySavingsPage() {
                       </Button>
                     )}
                   </div>
+
+                  <div className="flex items-center gap-1 pt-1 border-t border-border/50">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-xs gap-1.5 text-muted-foreground"
+                      onClick={() => setExtraTarget(t)}
+                      disabled={isSubmittingThis}
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Aporte extra
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-xs gap-1.5 text-muted-foreground ml-auto"
+                      onClick={() => setWithdrawTarget(t)}
+                      disabled={isSubmittingThis}
+                    >
+                      <Minus className="h-3.5 w-3.5" />
+                      Retirar
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             );
@@ -369,6 +395,48 @@ export default function MonthlySavingsPage() {
           </CardContent>
         </Card>
       )}
+
+      <DirectSavingsModal
+        open={!!extraTarget}
+        onOpenChange={(open) => {
+          if (!open) setExtraTarget(null);
+        }}
+        sheetId={sheetId}
+        reserves={reserves ?? []}
+        goals={goals ?? []}
+        futurePayments={futures ?? []}
+        defaultType="aporte"
+        defaultTarget={
+          extraTarget
+            ? {
+                targetType: extraTarget.tipoDestino,
+                targetId: extraTarget.destinoId,
+              }
+            : null
+        }
+        onSuccess={() => setExtraTarget(null)}
+      />
+
+      <DirectSavingsModal
+        open={!!withdrawTarget}
+        onOpenChange={(open) => {
+          if (!open) setWithdrawTarget(null);
+        }}
+        sheetId={sheetId}
+        reserves={reserves ?? []}
+        goals={goals ?? []}
+        futurePayments={futures ?? []}
+        defaultType="retirada"
+        defaultTarget={
+          withdrawTarget
+            ? {
+                targetType: withdrawTarget.tipoDestino,
+                targetId: withdrawTarget.destinoId,
+              }
+            : null
+        }
+        onSuccess={() => setWithdrawTarget(null)}
+      />
     </div>
   );
 }

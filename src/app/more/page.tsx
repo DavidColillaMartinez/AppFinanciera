@@ -14,8 +14,11 @@ import {
   FileSpreadsheet,
   DollarSign,
   CalendarCheck,
+  Smartphone,
 } from "lucide-react";
 import { useAppStore } from "@/stores/app-store";
+import { ThemeToggle } from "@/components/theme/theme-toggle";
+import { InstallAppButton } from "@/components/pwa/install-app-button";
 
 export default function MorePage() {
   const { monthlyIncome, incomeType } = useAppStore();
@@ -150,6 +153,48 @@ export default function MorePage() {
               </div>
               <ChevronRight className="h-4 w-4 text-muted-foreground" />
             </Link>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="space-y-3">
+        <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide px-1">
+          Apariencia
+        </h2>
+
+        <Card className="overflow-hidden transition-all hover:shadow-md">
+          <CardContent className="p-4 space-y-3">
+            <div className="flex items-center gap-3">
+              <div className="rounded-xl bg-primary/10 p-3">
+                <Palette className="h-5 w-5 text-primary" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-sm">Tema</p>
+                <p className="text-xs text-muted-foreground">
+                  Claro, oscuro o seguir el sistema
+                </p>
+              </div>
+            </div>
+            <ThemeToggle variant="segmented" className="w-full" />
+          </CardContent>
+        </Card>
+
+        <Card className="overflow-hidden transition-all hover:shadow-md">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <div className="rounded-xl bg-primary/10 p-3">
+                <Smartphone className="h-5 w-5 text-primary" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-sm">Instalar app</p>
+                <p className="text-xs text-muted-foreground">
+                  Acceso rapido desde la pantalla de inicio
+                </p>
+              </div>
+            </div>
+            <div className="mt-3">
+              <InstallAppButton size="sm" className="w-full" />
+            </div>
           </CardContent>
         </Card>
       </div>

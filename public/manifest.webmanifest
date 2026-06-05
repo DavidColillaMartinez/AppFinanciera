@@ -1,0 +1,61 @@
+{
+  "id": "/",
+  "name": "AppFinanciera",
+  "short_name": "Finanzas",
+  "description": "PWA privada de finanzas personales conectada a Google Sheets.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
+  "orientation": "portrait",
+  "theme_color": "#2563eb",
+  "background_color": "#f8fafc",
+  "categories": ["finance", "productivity"],
+  "lang": "es",
+  "dir": "ltr",
+  "prefer_related_applications": false,
+  "icons": [
+    {
+      "src": "/icons/app-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/app-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/app-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/app-icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Dashboard",
+      "url": "/",
+      "description": "Vista del mes"
+    },
+    {
+      "name": "Ahorros",
+      "url": "/savings",
+      "description": "Reservas, objetivos y pagos futuros"
+    },
+    {
+      "name": "Movimientos",
+      "url": "/transactions",
+      "description": "Ingresos y gastos"
+    }
+  ]
+}

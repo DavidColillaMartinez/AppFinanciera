@@ -851,6 +851,111 @@ live in `docs/FINANCE_AUDIT.md`.
 
 ---
 
+## Phase 12.6 — Savings planner, PWA install, UX polish — `implemented`
+
+- **Purpose**: Deliver the priority-based monthly savings planner (with
+  per-target "Aporte extra" / "Retirar" actions), a fully-featured PWA
+  install experience (origin-trial `<install>` element, `beforeinstallprompt`
+  fallback, iOS instructions), a user-facing dark-mode toggle, a reusable
+  icon picker, and tighter mobile drag activation.
+- **Main files**:
+  - `src/lib/finance/finance-engine.ts` — New planner types
+    `MonthlySavingsPlan`, `MonthlySavingsPlanItem`, `SavingsDifficulty`,
+    `BuildMonthlySavingsPlanOptions`; helpers `priorityWeight` (Alta=3,
+    Media=2, Baja=1), `normalizePriority`, `buildTargetSnapshot`. New
+    `buildMonthlySavingsPlan(ctx, options)` planner.
+  - `src/components/dashboard/add-savings-modal.tsx` — new. Opens from
+    `Disponible → "Añadir ahorros"`. Per-target editable amount, confirm-one
+    and confirm-all, empty state with 3 create actions, links to
+    `/savings?tab=objetivos|reservas|futuros`.
+  - `src/components/dashboard/direct-savings-modal.tsx` — new. Aporte /
+    Retirada toggle, target-type grid, target select, amount, optional
+    account, notas. Writes to `Mov_reservas` via
+    `useCreateSavingsContribution` / `useCreateSavingsWithdrawal`. Supports
+    `defaultTarget` hint from caller. Quick action "Ahorro" opens this
+    modal in aporte mode.
+  - `src/components/dashboard/disponible-explanation-modal.tsx` — New
+    `eligibleSavingsCount` and `onAddSavings` props. Primary "Añadir
+    ahorros" button with badge appears inside the modal when callback
+    is present.
+  - `src/app/page.tsx` — Imports + state for `AddSavingsModal` and
+    `DirectSavingsModal`. `monthlyPlan` memo via `buildMonthlySavingsPlan`
+    with `availableCapacity: capacidadAhorro`. `eligibleSavingsCount`
+    computed from `monthlyPlan.items`. `handleAddType` opens
+    `DirectSavingsModal` (aporte) for `TransactionType.AHORRO`. Theme
+    toggle and install button added to dashboard header. PointerSensor
+    tuned for mobile drag.
+  - `src/app/savings/monthly/page.tsx` — Added per-target "Aporte extra" and
+    "Retirar" buttons that open `DirectSavingsModal` with a pre-targeted
+    hint. Keeps the existing per-target edit / confirm-one / confirm-all /
+    unconfirm flow.
+  - `public/manifest.webmanifest` — new. `id`, `name` (AppFinanciera),
+    `short_name` (Finanzas), `start_url=/`, `scope=/`, `display=standalone`,
+    `display_override`, `theme_color=#2563eb`, `background_color`, icons,
+    shortcuts (Dashboard, Ahorros, Movimientos), `lang=es`.
+  - `src/hooks/use-pwa-install.ts` — new. Exposes
+    `PwaInstallState { support, canInstall, installed, promptInstall,
+    isReady, iosInstructions, registerNativeEl }`. Detects iOS, standalone
+    mode, native `<install>` element, listens `beforeinstallprompt` and
+    `appinstalled`.
+  - `src/components/pwa/install-app-button.tsx` — new. Full feature
+    detection: iOS modal with 3-step instructions, hidden `<install>`
+    element when `HTMLInstallElement` is present, fallback to
+    `usePwaInstall().promptInstall()` for `beforeinstallprompt`,
+    "App instalada" disabled state when already standalone. Returns
+    `null` when no support.
+  - `src/app/layout.tsx` — `manifest: "/manifest.webmanifest"`, `icons`,
+    appleWebApp, conditional `<meta httpEquiv="origin-trial" content={env
+    NEXT_PUBLIC_CHROME_INSTALL_ELEMENT_ORIGIN_TRIAL} />` in `<head>`,
+    `apple-touch-icon` link.
+  - `src/components/theme/theme-toggle.tsx` — new. `segmented` and
+    `buttons` variants. Light / dark / system modes. Mounted-safe to
+    avoid hydration mismatch.
+  - `src/components/ui/icon-picker.tsx` — new. 35-icon Lucide grid with
+    search + preview. Controlled via `value` / `onChange`. Exports
+    `renderIcon(name, className, fallback)` for legacy string icons.
+  - `src/features/categories/components/category-form.tsx` — Icon field
+    replaced by `IconPicker` via `Controller`; hidden input keeps
+    compatibility with `register("icono")`.
+  - `src/app/more/page.tsx` — New "Apariencia" section with `ThemeToggle`
+    (segmented) and `InstallAppButton` (sm) cards.
+- **Planner rules**:
+  - Excludes paused / completed / cancelled and targets with future
+    `fechaInicio` (helper `isDateBeforeMonth`).
+  - Fixed-date rule: `required monthly = remainingAmount / monthsRemaining`.
+  - No-date rule: priority-based proportional allocation across
+    `objetivo` targets (weights Alta=3, Media=2, Baja=1).
+  - Difficulty thresholds: ok / tight / difficult / impossible based on
+    `requiredMonthly` vs `availableAfterObligations`.
+  - Confirmed savings this month reduce pending. Completed targets do
+    not request more.
+  - Dashboard savings widgets ("Ahorro general", "Ahorro del mes") and
+    breakdown modals consume planner output and never display salary.
+- **PWA install rules**:
+  - Origin trial token via `NEXT_PUBLIC_CHROME_INSTALL_ELEMENT_ORIGIN_TRIAL`.
+    Absent token → no `<meta http-equiv="origin-trial">`; fallback path
+    still works.
+  - `<install>` element rendered with no `installurl` (self-installing app).
+  - iOS Safari shows 3-step instructions (Compartir → Añadir a pantalla
+    de inicio).
+  - Already-standalone users see a disabled "App instalada" state.
+  - No Google tokens stored in cookies / localStorage.
+- **Key conventions**:
+  - Savings remain ledger-based (`Mov_reservas`); no generic `Ahorro`
+    movement is created.
+  - Quick action "Ahorro" → `DirectSavingsModal` (aporte default). Monthly
+    confirmation accessible only via "Ahorro del mes".
+  - Mobile drag: `PointerSensor` activation
+    `{ distance: 6|12, delay: 180|0, tolerance: 8 }`.
+  - iOS zoom prevention: `input, select, textarea { font-size: 16px }`
+    already in `globals.css`.
+  - Dark mode persists via `next-themes` localStorage; toggle
+    is mounted-safe to avoid SSR hydration mismatch.
+  - Legacy string icons handled via `renderIcon(name, className, fallback)`
+    exported from `icon-picker.tsx`.
+
+---
+
 | Phase | Topic | Status |
 |-------|-------|--------|
 | 3 | Template / schema / validation | implemented |
@@ -874,4 +979,4 @@ live in `docs/FINANCE_AUDIT.md`.
 | 12.4 | Real dashboard customization: unified widgets, layout, charts as widgets | implemented |
 | 12.4.1 | Dashboard repair: drag/reorder, multi-source charts, mobile polish | implemented |
 | 12.5 | PWA polish: dark mode foundation, iOS zoom fix, dead code cleanup | implemented |
-| 12.4 | Real dashboard customization: unified widgets, layout, chart-as-widget | implemented |
+| 12.6 | Savings planner, PWA install, UX polish | implemented |
